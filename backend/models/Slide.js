@@ -1,32 +1,38 @@
 const mongoose = require('mongoose');
 
-const deckSchema = new mongoose.Schema({
+const slideSchema = new mongoose.Schema({
   title: {
     type: String,
     required: true,
     trim: true
   },
-  description: {
+  content: {
     type: String,
-    trim: true
+    required: true
+  },
+  type: {
+    type: String,
+    enum: ['title', 'bullet', 'image', 'text', 'chart'],
+    default: 'text'
   },
   theme: {
     type: String,
     enum: ['light', 'dark', 'gradient'],
     default: 'light'
   },
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+  layout: {
+    type: String,
+    enum: ['title', 'two-column', 'full-width', 'split'],
+    default: 'full-width'
+  },
+  order: {
+    type: Number,
     required: true
   },
-  slides: [{
+  deck: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Slide'
-  }],
-  isPublic: {
-    type: Boolean,
-    default: false
+    ref: 'Deck',
+    required: true
   },
   createdAt: {
     type: Date,
@@ -39,9 +45,9 @@ const deckSchema = new mongoose.Schema({
 });
 
 // Update the updatedAt timestamp before saving
-deckSchema.pre('save', function(next) {
+slideSchema.pre('save', function(next) {
   this.updatedAt = Date.now();
   next();
 });
 
-module.exports = mongoose.model('Deck', deckSchema); 
+module.exports = mongoose.model('Slide', slideSchema); 
