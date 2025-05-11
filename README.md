@@ -1,193 +1,115 @@
-# Slide Generator
+# SlideGen - AI-Powered Slide Generation Platform
 
-A modern web application for generating, managing, and exporting presentation slides using Next.js and Express.js.
+A modern web application that helps users create beautiful presentations using AI. Built with Next.js, Node.js, and MongoDB.
 
 ## Features
 
-### Core Features
-
-1. **Slide Generation**
-
-   - AI-powered slide generation using OpenAI's GPT-4
-   - Multiple slide types (Business, Academic, Creative)
-   - Customizable themes (Modern, Classic, Minimal)
-   - Real-time preview of generated slides
-
-2. **Image Management**
-
-   - Upload images for individual slides
-   - Support for multiple image formats (PNG, JPG, GIF)
-   - Image size limit of 5MB
-   - Preview and remove images
-
-3. **Deck Management**
-
-   - Create and save presentation decks
-   - View all saved decks
-   - Edit existing decks
-   - Delete decks
-   - Export decks as PDF
-
-4. **User Authentication**
-   - User registration and login
-   - Protected routes
-   - JWT-based authentication
-   - User-specific decks
-
-### Technical Features
-
-1. **Frontend**
-
-   - Built with Next.js
-   - Modern UI using Tailwind CSS
-   - Responsive design
-   - Client-side form validation
-   - Protected routes
-   - Image upload with preview
-   - PDF export functionality
-
-2. **Backend**
-   - Express.js server
-   - MongoDB database
-   - JWT authentication
-   - File upload handling
-   - PDF generation
-   - OpenAI API integration
+- 🎨 Multiple slide templates and themes
+- 🤖 AI-powered content generation
+- 📊 Dynamic slide layouts
+- 💾 Save and export presentations
+- 🎯 User authentication system
+- 📱 Responsive design
 
 ## Tech Stack
 
 ### Frontend
-
-- Next.js
-- React
+- Next.js 14 (App Router)
 - Tailwind CSS
-- Axios
-- JavaScript
+- ShadcnUI Components
+- React-PDF for export
 
 ### Backend
-
+- Node.js
 - Express.js
-- MongoDB
-- Mongoose
-- JWT
-- Multer
-- PDFKit
-- OpenAI API
-
-## Prerequisites
-
-- Node.js (v14 or higher)
-- MongoDB
-- OpenAI API key
-
-## Installation
-
-1. Clone the repository:
-
-   ```bash
-   git clone <repository-url>
-   cd SLIDE_GEN
-   ```
-
-2. Install backend dependencies:
-
-   ```bash
-   cd backend
-   npm install
-   ```
-
-3. Install frontend dependencies:
-
-   ```bash
-   cd ../frontend
-   npm install
-   ```
-
-4. Create a `.env` file in the backend directory:
-
-   ```
-   MONGODB_URI=your_mongodb_uri
-   JWT_SECRET=your_jwt_secret
-   OPENAI_API_KEY=your_openai_api_key
-   ```
-
-5. Create a `.env.local` file in the frontend directory:
-   ```
-   NEXT_PUBLIC_API_URL=http://localhost:5000/api
-   ```
-
-## Running the Application
-
-1. Start the backend server:
-
-   ```bash
-   cd backend
-   npm run dev
-   ```
-
-2. Start the frontend development server:
-
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-
-3. Access the application at `http://localhost:3000`
+- MongoDB with Mongoose
+- Hugging Face API Integration
 
 ## Project Structure
 
 ```
-SLIDE_GEN/
-├── backend/
-│   ├── config/
-│   ├── middleware/
-│   ├── models/
-│   ├── routes/
-│   ├── uploads/
-│   ├── server.js
-│   └── package.json
-├── frontend/
-│   ├── public/
-│   ├── src/
-│   │   ├── components/
-│   │   ├── contexts/
-│   │   ├── pages/
-│   │   ├── services/
-│   │   └── styles/
-│   └── package.json
-└── README.md
+slidegen/
+├── frontend/           # Next.js frontend application
+│   ├── app/           # App router pages
+│   ├── components/    # React components
+│   ├── public/        # Static assets
+│   └── styles/        # Global styles
+│
+├── backend/           # Node.js backend application
+│   ├── controllers/   # Route controllers
+│   ├── models/        # MongoDB models
+│   ├── routes/        # API routes
+│   └── config/        # Configuration files
 ```
 
-## API Endpoints
+## Getting Started
 
-### Authentication
+### Prerequisites
+- Node.js 18+
+- MongoDB
+- npm or yarn
 
-- POST `/api/auth/register` - Register a new user
-- POST `/api/auth/login` - Login user
-- GET `/api/auth/me` - Get current user
+### Installation
 
-### Slides
+1. Clone the repository
+```bash
+git clone https://github.com/yourusername/slidegen.git
+cd slidegen
+```
 
-- POST `/api/slides/generate` - Generate slides
-- POST `/api/slides/upload-image` - Upload slide image
+2. Install frontend dependencies
+```bash
+cd frontend
+npm install
+```
 
-### Decks
+3. Install backend dependencies
+```bash
+cd ../backend
+npm install
+```
 
-- GET `/api/decks` - Get all decks
-- GET `/api/decks/:id` - Get a single deck
-- POST `/api/decks` - Create a new deck
-- PUT `/api/decks/:id` - Update a deck
-- DELETE `/api/decks/:id` - Delete a deck
-- GET `/api/decks/:id/export` - Export deck as PDF
+4. Set up environment variables
+- Create `.env` files in both frontend and backend directories
+- Add necessary environment variables (see .env.example files)
+
+5. Start the development servers
+
+Frontend:
+```bash
+cd frontend
+npm run dev
+```
+
+Backend:
+```bash
+cd backend
+npm run dev
+```
+
+## Environment Variables
+
+### Frontend (.env)
+```
+NEXT_PUBLIC_API_URL=http://localhost:5000
+```
+
+### Backend (.env)
+```
+PORT=5000
+MONGODB_URI=mongodb://localhost:27017/slidegen
+JWT_SECRET=your_jwt_secret
+HUGGINGFACE_API_KEY=your_huggingface_api_key
+```
 
 ## Contributing
 
 1. Fork the repository
-2. Create your feature branch
-3. Commit your changes
-4. Push to the branch
-5. Create a new Pull Request
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the MIT License - see the LICENSE file for details.
