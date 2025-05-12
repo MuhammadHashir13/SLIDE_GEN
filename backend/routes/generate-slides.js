@@ -14,16 +14,21 @@ router.post('/', auth, async (req, res) => {
   try {
     const { deckId, prompt, numSlides, theme } = req.body;
 
+    // Add debugging to log the theme
+    console.log(`Requested theme: ${theme}, type: ${typeof theme}`);
+
     // Check if deck exists and belongs to user
     const deck = await Deck.findOne({ _id: deckId, user: req.user._id });
     if (!deck) {
       return res.status(404).json({ message: 'Deck not found' });
     }
 
-    console.log(`Generating ${numSlides} slides for deck "${deck.title}" with prompt: "${prompt}"`);
+    // Use the provided theme or fall back to the deck's theme if not provided
+    const slideTheme = theme || deck.theme || 'light';
+    console.log(`Generating ${numSlides} slides for deck "${deck.title}" with prompt: "${prompt}" and theme: "${slideTheme}"`);
 
     // Generate slides using Gemini API
-    const slidesData = await generateSlidesUsingGemini(deck.title, prompt, numSlides, theme);
+    const slidesData = await generateSlidesUsingGemini(deck.title, prompt, numSlides, slideTheme);
     console.log(`Successfully generated ${slidesData.length} slides using Gemini API`);
     
     // Create the slides in the database
@@ -40,7 +45,7 @@ router.post('/', auth, async (req, res) => {
         title: slideData.title || `Slide ${index + 1}`,
         content: slideData.content || '',
         type,
-        theme: deck.theme,
+        theme: slideTheme, // Use the normalized theme
         layout,
         order: index,
         deck: deckId
@@ -74,6 +79,20 @@ router.post('/', auth, async (req, res) => {
 // Generate slides using Google Gemini API with direct fetch
 async function generateSlidesUsingGemini(title, prompt, numSlides, theme) {
   try {
+    // Validate and normalize the theme
+    if (!theme || typeof theme !== 'string') {
+      console.log(`Theme missing or invalid type: ${theme}, defaulting to 'light'`);
+      theme = 'light';
+    } else {
+      theme = theme.toLowerCase().trim();
+      if (!['light', 'dark'].includes(theme)) {
+        console.log(`Invalid theme value: "${theme}", defaulting to 'light'`);
+        theme = 'light';
+      }
+    }
+    
+    console.log(`Using theme: "${theme}" for slide generation`);
+    
     const apiKey = process.env.GEMINI_API_KEY || 'your-api-key-here';
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
     
@@ -86,37 +105,54 @@ async function generateSlidesUsingGemini(title, prompt, numSlides, theme) {
     const systemPrompt = `You are a professional presentation creator. 
 Your task is to create EXACTLY ${numSlides} presentation slides about "${prompt}". 
 The title of the presentation is "${title}".
+The theme is "${theme}".
 
 Each slide should have:
 1. A clear, concise title
 2. Properly formatted content with HTML styling
-3. Relevant information that's factually accurate, NEVER use generic placeholder text
+3. Relevant, SPECIFIC information that's factually accurate
 4. Professional tone and language
+
+CRITICAL INSTRUCTIONS:
+- NEVER use generic placeholders like "Additional feature or benefit", "Supporting information or data", "Important Information", etc.
+- ALL content MUST be specific to the topic (${prompt})
+- Each slide should contain actual information, facts, or descriptions related to ${prompt}
+- Even if you don't know specific details, make reasonable, plausible content rather than generic placeholders
+- For conclusion slides, include specific summary points about ${prompt}, not vague statements
 
 The slides should include:
 - A title slide (first slide)
-- Content slides with key information
+- Content slides with SPECIFIC key information
 - A conclusion/summary slide (last slide) with SPECIFIC information related to the topic, not generic placeholders
 
 Use proper HTML formatting with inline CSS styling for a professional appearance.
 Wrap each slide's content in a div with padding and styling.
-Use these style guidelines for ALL slides:
-- Font sizes: 48px for main heading, 36px for slide titles, 24px for main text, 20px for bullet points
-- Colors: #1e40af (dark blue) for headings, #334155 (slate) for body text
-- Layout: Center titles, left-align content with proper spacing
-- Padding: 60px padding on all sides
-- Width: 100% width to fill the slide
-- Use flexbox to center content vertically
-- Add background color #f8fafc (very light gray) to the slide
+Use these style guidelines based on the selected theme:
+
+${theme === 'dark' ? 
+  `DARK THEME:
+  - Background: #1e293b (dark blue-gray)
+  - Font colors: #f8fafc (very light gray) for all text
+  - Headings: #60a5fa (light blue) for titles and headings
+  - Text: #e2e8f0 (light gray) for body text
+  - Accents: #818cf8 (indigo) for highlights and bullet points` 
+:
+  `LIGHT THEME:
+  - Background: #f8fafc (very light gray)
+  - Font colors: #334155 (slate) for body text, #1e40af (dark blue) for headings
+  - Layout: Center titles, left-align content with proper spacing
+  - Padding: 60px padding on all sides`
+}
 
 IMPORTANT: Your response MUST include EXACTLY ${numSlides} slides, no more and no less.
-IMPORTANT: The conclusion slide MUST contain specific details about ${title}, not generic placeholders.
-IMPORTANT: Never use placeholders like "Highlighted benefit or feature" or "Important conclusion point".
+IMPORTANT: Every bullet point must contain actual content specific to ${prompt}.
+IMPORTANT: Never, under any circumstances, use placeholders like "Highlighted benefit or feature" or "Important conclusion point".
+IMPORTANT: If you cannot generate exactly ${numSlides} slides with specific content, it is better to repeat information than to use generic placeholders.
 
 Example slide content format:
 {
-  "title": "Slide Title",
-  "content": "<div style='display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;'><h2 style='font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;'>Heading</h2><p style='font-size: 24px; margin-bottom: 25px; color: #334155;'>Description text</p><ul style='font-size: 20px; margin-left: 30px; color: #334155;'><li style='margin-bottom: 15px;'>Point 1</li><li style='margin-bottom: 15px;'>Point 2</li></ul></div>"
+  "title": "Specific Title About ${prompt}",
+  "content": "<div style='display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;'><h2 style='font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;'>Specific Heading About ${prompt}</h2><p style='font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};'>Specific description about an aspect of ${prompt}</p><ul style='font-size: 20px; margin-left: 30px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};'><li style='margin-bottom: 15px;'>Specific fact about ${prompt}</li><li style='margin-bottom: 15px;'>Specific detail about ${prompt}</li></ul></div>"
 }
 
 Your response should be a valid JSON array of exactly ${numSlides} slide objects.`;
@@ -131,6 +167,10 @@ Your response should be a valid JSON array of exactly ${numSlides} slide objects
         ]
       }]
     };
+    
+    // Log a sample of what we're sending to Gemini API
+    console.log(`Sending request to Gemini API with theme: "${theme}"`);
+    console.log(`Sample template reference in prompt: background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}`);
     
     // Make the API request
     const response = await fetch(apiUrl, {
@@ -214,7 +254,196 @@ Your response should be a valid JSON array of exactly ${numSlides} slide objects
     
     // If we don't have enough slides, make another API call to get more
     if (slides.length < numSlides) {
-      throw new Error(`AI generated only ${slides.length} slides, but ${numSlides} were requested`);
+      // Make another API call with a more focused prompt to get the remaining slides
+      const remainingSlides = numSlides - slides.length;
+      console.log(`API generated only ${slides.length} slides, but ${numSlides} were requested. Making another API call for the remaining ${remainingSlides} slides.`);
+      
+      let attemptCount = 0;
+      const maxAttempts = 3;
+      
+      while (slides.length < numSlides && attemptCount < maxAttempts) {
+        attemptCount++;
+        console.log(`Attempt ${attemptCount} to generate the remaining ${numSlides - slides.length} slides...`);
+        
+        try {
+          // Craft a more specific prompt focused on getting the remaining slides
+          // Format instructions become more explicit with each attempt
+          let specificPrompt;
+          
+          if (attemptCount === 1) {
+            specificPrompt = `You are a presentation expert. Create EXACTLY ${numSlides - slides.length} more detailed slides about "${prompt}" with the theme "${theme}". 
+Each slide MUST contain SPECIFIC factual information about ${prompt}, never generic placeholders.
+Return your response as a valid JSON array of slide objects.`;
+          } else if (attemptCount === 2) {
+            specificPrompt = `Generate ${numSlides - slides.length} specific slides about "${prompt}". 
+FORMAT: Return ONLY a valid JSON array with this exact structure:
+[
+  {
+    "title": "Specific Title About ${prompt}",
+    "content": "<div style='padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'};'><h2 style='color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};'>Specific Heading</h2><p>Specific content about ${prompt}</p></div>"
+  }
+]`;
+          } else {
+            // Last attempt - extremely simplified prompt
+            specificPrompt = `Create ${numSlides - slides.length} slides about ${prompt}. Return ONLY valid JSON like this: 
+[{"title":"Slide Title","content":"<div style='padding:60px'><h2>Heading</h2><p>Content</p></div>"}]`;
+          }
+          
+          // Make another API call with the specific prompt
+          const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: specificPrompt }
+                ]
+              }]
+            })
+          });
+          
+          if (!response.ok) {
+            console.log(`API request attempt ${attemptCount} failed with status ${response.status}`);
+            continue; // Try again with a different prompt
+          }
+          
+          const data = await response.json();
+          const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          
+          // Try multiple approaches to extract valid JSON
+          let additionalSlides = [];
+          let extractionSuccessful = false;
+          
+          // Extraction approach 1: Look for JSON blocks
+          const jsonFormats = [
+            /```json\n([\s\S]*?)\n```/, 
+            /```\n([\s\S]*?)\n```/,
+            /\[\s*\{\s*"title"[\s\S]*?\}\s*\]/
+          ];
+          
+          for (const format of jsonFormats) {
+            try {
+              const match = responseText.match(format);
+              if (match) {
+                const jsonContent = match[1] || match[0];
+                const cleanedJson = jsonContent.replace(/```json|```/g, '').trim();
+                const parsed = JSON.parse(cleanedJson);
+                
+                if (Array.isArray(parsed)) {
+                  additionalSlides = parsed;
+                  extractionSuccessful = true;
+                  console.log(`Successfully parsed JSON using format ${format}`);
+                  break;
+                } else if (parsed.slides && Array.isArray(parsed.slides)) {
+                  additionalSlides = parsed.slides;
+                  extractionSuccessful = true;
+                  console.log(`Successfully parsed JSON with slides property`);
+                  break;
+                }
+              }
+            } catch (e) {
+              console.log(`JSON extraction attempt failed: ${e.message}`);
+            }
+          }
+          
+          // Extraction approach 2: If no JSON found, try to create it from the text
+          if (!extractionSuccessful) {
+            console.log("Attempting to extract slides from non-JSON response");
+            try {
+              // Look for patterns like "## Slide 1" or "Slide 1:" to break into slides
+              const slideMatches = responseText.match(/(?:##\s*Slide\s*\d+|Slide\s*\d+\s*:|Title:\s*.*?\n)/g);
+              
+              if (slideMatches && slideMatches.length > 0) {
+                const slideTexts = responseText.split(/(?:##\s*Slide\s*\d+|Slide\s*\d+\s*:|Title:\s*.*?\n)/g).slice(1);
+                
+                for (let i = 0; i < slideTexts.length && additionalSlides.length < (numSlides - slides.length); i++) {
+                  const slideText = slideTexts[i].trim();
+                  
+                  // Extract title - look for the first line or a title pattern
+                  let title = slideText.split('\n')[0].replace(/^[#\s*]*/, '').trim();
+                  if (!title || title.length < 3) {
+                    title = `${prompt} - Key Point ${i+1}`;
+                  }
+                  
+                  // Create HTML content with the appropriate theme
+                  const content = `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+                    <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">${title}</h2>
+                    <div style="font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
+                      ${slideText.replace(/\n/g, '<br>')}
+                    </div>
+                  </div>`;
+                  
+                  // Log the theme being applied to this slide
+                  console.log(`Created slide with theme: ${theme}`);
+                  
+                  additionalSlides.push({
+                    title: title,
+                    content: content
+                  });
+                }
+                
+                if (additionalSlides.length > 0) {
+                  extractionSuccessful = true;
+                  console.log(`Created ${additionalSlides.length} slides from text content`);
+                }
+              }
+            } catch (e) {
+              console.log(`Text-based extraction failed: ${e.message}`);
+            }
+          }
+          
+          // If we got any slides, add them to our collection
+          if (additionalSlides.length > 0) {
+            const neededSlides = Math.min(additionalSlides.length, numSlides - slides.length);
+            for (let i = 0; i < neededSlides; i++) {
+              slides.push(additionalSlides[i]);
+            }
+            console.log(`Added ${neededSlides} slides from attempt ${attemptCount}`);
+          }
+          
+          // If we have enough slides, break out of the retry loop
+          if (slides.length >= numSlides) {
+            console.log(`Successfully generated all ${numSlides} slides`);
+            break;
+          }
+          
+        } catch (error) {
+          console.log(`Attempt ${attemptCount} failed: ${error.message}`);
+          // Continue to next attempt rather than throwing
+        }
+      }
+      
+      // If we still don't have enough slides after all attempts, create simplified ones
+      if (slides.length < numSlides) {
+        console.log(`Could not generate all ${numSlides} slides after ${maxAttempts} attempts. Creating simple slides to fill the gap with theme: ${theme}`);
+        
+        // Fill remaining slides with simplified content
+        const remaining = numSlides - slides.length;
+        for (let i = 0; i < remaining; i++) {
+          const slideNumber = slides.length + 1;
+          const slideTitle = `${prompt} - Point ${slideNumber}`;
+          
+          // Get theme-specific background and text colors
+          const bgColor = theme === 'dark' ? '#1e293b' : '#f8fafc';
+          const headingColor = theme === 'dark' ? '#60a5fa' : '#1e40af';
+          const textColor = theme === 'dark' ? '#e2e8f0' : '#334155';
+          const accentColor = theme === 'dark' ? '#818cf8' : '#2563eb';
+          
+          console.log(`Creating fallback slide ${slideNumber} with theme: ${theme}, bgColor: ${bgColor}, headingColor: ${headingColor}`);
+          
+          slides.push({
+            title: slideTitle,
+            content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${bgColor}; font-family: Arial, sans-serif;">
+              <h2 style="font-size: 36px; margin-bottom: 30px; color: ${headingColor}; text-align: center;">${slideTitle}</h2>
+              <p style="font-size: 24px; margin-bottom: 25px; color: ${textColor};">
+                Information about ${prompt} related to point ${slideNumber}.
+              </p>
+            </div>`
+          });
+        }
+      }
     }
     
     // If we have too many slides, trim to the exact number requested
@@ -288,18 +517,18 @@ function createBasicSlideStructure(deckTitle, numSlides, prompt) {
   const slides = [
     { 
       title: cleanTitle, 
-      content: `<div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h1 style="font-size: 48px; margin-bottom: 40px; color: #1e40af; text-align: center;">${cleanTitle}</h1>
-  <p style="font-size: 24px; margin-bottom: 40px; color: #334155; text-align: center;">An overview and introduction</p>
-  <ul style="font-size: 22px; list-style-type: none; max-width: 800px; margin: 0 auto; color: #334155;">
+      content: `<div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h1 style="font-size: 48px; margin-bottom: 40px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">${cleanTitle}</h1>
+  <p style="font-size: 24px; margin-bottom: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'}; text-align: center;">An overview and introduction</p>
+  <ul style="font-size: 22px; list-style-type: none; max-width: 800px; margin: 0 auto; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: #2563eb;">➤</span> Key features and highlights
+      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> Key features and highlights
     </li>
     <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: #2563eb;">➤</span> Why ${cleanTitle} stands out
+      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> Why ${cleanTitle} stands out
     </li>
     <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: #2563eb;">➤</span> What we'll cover in this presentation
+      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> What we'll cover in this presentation
     </li>
   </ul>
 </div>`
@@ -318,10 +547,10 @@ function createBasicSlideStructure(deckTitle, numSlides, prompt) {
     } else if (i < topics.length) {
       slides.push({ 
         title: titleCase(topics[i]), 
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">${titleCase(topics[i])}</h2>
-  <p style="font-size: 24px; margin-bottom: 25px; color: #334155;">Key information about ${topics[i]}:</p>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">${titleCase(topics[i])}</h2>
+  <p style="font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Key information about ${topics[i]}:</p>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Important feature or detail</li>
     <li style="margin-bottom: 20px;">Relevant statistics or data</li>
     <li style="margin-bottom: 20px;">Competitive advantages</li>
@@ -332,10 +561,10 @@ function createBasicSlideStructure(deckTitle, numSlides, prompt) {
     } else {
       slides.push({ 
         title: `Key Aspect ${i + 1}`, 
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Important Information</h2>
-  <p style="font-size: 24px; margin-bottom: 25px; color: #334155;">Details about ${cleanTitle}:</p>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Important Information</h2>
+  <p style="font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Details about ${cleanTitle}:</p>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Feature point or specification</li>
     <li style="margin-bottom: 20px;">User benefit or advantage</li>
     <li style="margin-bottom: 20px;">Supporting data or information</li>
@@ -348,15 +577,15 @@ function createBasicSlideStructure(deckTitle, numSlides, prompt) {
   // Add a more detailed conclusion
   slides.push({ 
     title: "Summary & Conclusion", 
-    content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Summary</h2>
-  <p style="font-size: 24px; margin-bottom: 25px; color: #334155;">Key takeaways about ${cleanTitle}:</p>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+    content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Summary</h2>
+  <p style="font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Key takeaways about ${cleanTitle}:</p>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Highlighted benefit or feature</li>
     <li style="margin-bottom: 20px;">Important conclusion point</li>
     <li style="margin-bottom: 20px;">Call to action or next steps</li>
   </ul>
-  <p style="font-size: 24px; margin-top: 40px; text-align: center; color: #334155;">Thank you for your attention!</p>
+  <p style="font-size: 24px; margin-top: 40px; text-align: center; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Thank you for your attention!</p>
 </div>`
   });
   
@@ -383,9 +612,9 @@ function getTopicSpecificTemplates(title, topics) {
     return [
       {
         title: "Performance & Specifications",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Performance & Specifications</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Performance & Specifications</h2>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Engine/Motor specifications and power output</li>
     <li style="margin-bottom: 20px;">Acceleration and top speed</li>
     <li style="margin-bottom: 20px;">Range and efficiency metrics</li>
@@ -395,9 +624,9 @@ function getTopicSpecificTemplates(title, topics) {
       },
       {
         title: "Design & Features",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Design & Features</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Design & Features</h2>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Exterior design highlights</li>
     <li style="margin-bottom: 20px;">Interior comfort and space</li>
     <li style="margin-bottom: 20px;">Technology and infotainment</li>
@@ -407,9 +636,9 @@ function getTopicSpecificTemplates(title, topics) {
       },
       {
         title: "Technology & Innovation",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Technology & Innovation</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Technology & Innovation</h2>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Advanced driver assistance systems</li>
     <li style="margin-bottom: 20px;">Connectivity features</li>
     <li style="margin-bottom: 20px;">Software capabilities and updates</li>
@@ -419,9 +648,9 @@ function getTopicSpecificTemplates(title, topics) {
       },
       {
         title: "Pricing & Availability",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Pricing & Availability</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Pricing & Availability</h2>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Starting price and trim levels</li>
     <li style="margin-bottom: 20px;">Available options and packages</li>
     <li style="margin-bottom: 20px;">Release date and production information</li>
@@ -440,9 +669,9 @@ function getTopicSpecificTemplates(title, topics) {
     return [
       {
         title: "Key Features",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Key Features</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Key Features</h2>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Primary functionality and capabilities</li>
     <li style="margin-bottom: 20px;">Unique selling points</li>
     <li style="margin-bottom: 20px;">Technical specifications</li>
@@ -452,9 +681,9 @@ function getTopicSpecificTemplates(title, topics) {
       },
       {
         title: "Use Cases & Applications",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Use Cases & Applications</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Use Cases & Applications</h2>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Primary user scenarios</li>
     <li style="margin-bottom: 20px;">Industry applications</li>
     <li style="margin-bottom: 20px;">Problem-solving capabilities</li>
@@ -464,9 +693,9 @@ function getTopicSpecificTemplates(title, topics) {
       },
       {
         title: "Benefits & Advantages",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Benefits & Advantages</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Benefits & Advantages</h2>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Performance improvements</li>
     <li style="margin-bottom: 20px;">Cost or time savings</li>
     <li style="margin-bottom: 20px;">Competitive advantages</li>
@@ -481,9 +710,9 @@ function getTopicSpecificTemplates(title, topics) {
   return [
     {
       title: "Overview & Background",
-      content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Overview & Background</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+      content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Overview & Background</h2>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">History and development</li>
     <li style="margin-bottom: 20px;">Key milestones and achievements</li>
     <li style="margin-bottom: 20px;">Market position and relevance</li>
@@ -493,9 +722,9 @@ function getTopicSpecificTemplates(title, topics) {
     },
     {
       title: "Key Features & Benefits",
-      content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Key Features & Benefits</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+      content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Key Features & Benefits</h2>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Primary features or components</li>
     <li style="margin-bottom: 20px;">Main advantages and benefits</li>
     <li style="margin-bottom: 20px;">Unique selling propositions</li>
@@ -505,9 +734,9 @@ function getTopicSpecificTemplates(title, topics) {
     },
     {
       title: "Applications & Use Cases",
-      content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Applications & Use Cases</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+      content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Applications & Use Cases</h2>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Practical applications</li>
     <li style="margin-bottom: 20px;">Real-world examples</li>
     <li style="margin-bottom: 20px;">Success stories or case studies</li>
@@ -568,7 +797,7 @@ function ensureCorrectSlideCount(slidesData, numSlides, deckTitle, prompt) {
         slidesData.push({ 
           title: topicTitle, 
           content: `<div style="padding: 40px; height: 100%;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af;">${topicTitle}</h2>
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">${topicTitle}</h2>
   <p style="font-size: 24px; margin-bottom: 25px;">Key information about ${topics[topicIndex]}:</p>
   <ul style="font-size: 22px; margin-left: 30px;">
     <li style="margin-bottom: 15px;">Important feature or detail</li>
@@ -586,7 +815,7 @@ function ensureCorrectSlideCount(slidesData, numSlides, deckTitle, prompt) {
         slidesData.push({ 
           title: `Additional Point ${slideNumber}`, 
           content: `<div style="padding: 40px; height: 100%;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af;">Additional Information</h2>
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">Additional Information</h2>
   <p style="font-size: 24px; margin-bottom: 25px;">More details about ${cleanTitle}:</p>
   <ul style="font-size: 22px; margin-left: 30px;">
     <li style="margin-bottom: 15px;">Additional specifications or features</li>
@@ -617,18 +846,18 @@ function ensureCorrectSlideCount(slidesData, numSlides, deckTitle, prompt) {
   // Ensure the first slide is a title slide with proper formatting
   if (slidesData.length > 0) {
     slidesData[0].title = cleanTitle;
-    slidesData[0].content = `<div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h1 style="font-size: 48px; margin-bottom: 40px; color: #1e40af; text-align: center;">${cleanTitle}</h1>
-  <p style="font-size: 24px; margin-bottom: 40px; color: #334155; text-align: center;">An overview and introduction</p>
-  <ul style="font-size: 22px; list-style-type: none; max-width: 800px; margin: 0 auto; color: #334155;">
+    slidesData[0].content = `<div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h1 style="font-size: 48px; margin-bottom: 40px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">${cleanTitle}</h1>
+  <p style="font-size: 24px; margin-bottom: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'}; text-align: center;">An overview and introduction</p>
+  <ul style="font-size: 22px; list-style-type: none; max-width: 800px; margin: 0 auto; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: #2563eb;">➤</span> Key features and highlights
+      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> Key features and highlights
     </li>
     <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: #2563eb;">➤</span> Why ${cleanTitle} stands out
+      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> Why ${cleanTitle} stands out
     </li>
     <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: #2563eb;">➤</span> What we'll cover in this presentation
+      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> What we'll cover in this presentation
     </li>
   </ul>
 </div>`;
@@ -637,15 +866,15 @@ function ensureCorrectSlideCount(slidesData, numSlides, deckTitle, prompt) {
   // Ensure the last slide is a conclusion with proper formatting
   if (slidesData.length > 1) {
     slidesData[slidesData.length - 1].title = "Summary & Conclusion";
-    slidesData[slidesData.length - 1].content = `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: #f8fafc; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: #1e40af; text-align: center;">Summary</h2>
-  <p style="font-size: 24px; margin-bottom: 25px; color: #334155;">Key takeaways about ${cleanTitle}:</p>
-  <ul style="font-size: 22px; margin-left: 40px; color: #334155;">
+    slidesData[slidesData.length - 1].content = `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
+  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Summary</h2>
+  <p style="font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Key takeaways about ${cleanTitle}:</p>
+  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
     <li style="margin-bottom: 20px;">Highlighted benefit or feature</li>
     <li style="margin-bottom: 20px;">Important conclusion point</li>
     <li style="margin-bottom: 20px;">Call to action or next steps</li>
   </ul>
-  <p style="font-size: 24px; margin-top: 40px; text-align: center; color: #334155;">Thank you for your attention!</p>
+  <p style="font-size: 24px; margin-top: 40px; text-align: center; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Thank you for your attention!</p>
 </div>`;
   }
   

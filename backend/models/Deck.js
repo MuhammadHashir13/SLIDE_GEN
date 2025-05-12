@@ -12,7 +12,7 @@ const deckSchema = new mongoose.Schema({
   },
   theme: {
     type: String,
-    enum: ['light', 'dark', 'gradient'],
+    enum: ['light', 'dark'],
     default: 'light'
   },
   user: {

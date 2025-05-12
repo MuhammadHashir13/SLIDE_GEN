@@ -133,7 +133,6 @@ export default function CreatePresentation() {
               >
                 <option value="light">Light Theme</option>
                 <option value="dark">Dark Theme</option>
-                <option value="gradient">Gradient Theme</option>
               </select>
               </div>
               <div className="w-1/2">

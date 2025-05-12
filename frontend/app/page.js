@@ -21,12 +21,6 @@ export default function Home() {
             >
               Create Presentation
             </Link>
-            <Link
-              href="/templates"
-              className="px-8 py-3 bg-white text-gray-900 rounded-lg font-medium border border-gray-300 hover:bg-gray-50 transition-colors"
-            >
-              Browse Templates
-            </Link>
           </div>
         </div>
       </section>
@@ -81,10 +75,10 @@ export default function Home() {
                 </svg>
               </div>
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                Beautiful Templates
+                Easy Customization
               </h3>
               <p className="text-gray-600">
-                Choose from a variety of professionally designed templates and themes.
+                Edit and customize your slides with our intuitive editor for perfect presentations.
               </p>
             </div>
 

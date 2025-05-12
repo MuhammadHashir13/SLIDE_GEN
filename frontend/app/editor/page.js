@@ -26,6 +26,9 @@ export default function Editor() {
   const slidesContainerRef = useRef(null);
   const slideRefs = useRef([]);
 
+  // Track if we have focus in the editor to prevent focus loss during formatting
+  const [editorHasFocus, setEditorHasFocus] = useState(false);
+
   useEffect(() => {
     if (!getToken()) {
       router.push('/login');
@@ -61,9 +64,9 @@ export default function Editor() {
   // Save the current slide content from the editable div
   const saveCurrentSlideContent = () => {
     if (editableRef.current && slides[currentSlide]) {
-      const newSlides = [...slides];
+    const newSlides = [...slides];
       newSlides[currentSlide].content = editableRef.current.innerHTML;
-      setSlides(newSlides);
+    setSlides(newSlides);
     }
   };
 
@@ -96,7 +99,7 @@ export default function Editor() {
         body: JSON.stringify({
           deckId: deckId,
           prompt: deck.description,
-          numSlides: 5, // Default to 5 slides or customize as needed
+          numSlides: slides.length || 5, // Use the current number of slides or default to 5 if none
           theme: deck.theme || 'light'
         }),
       });
@@ -111,7 +114,7 @@ export default function Editor() {
     }
   };
 
-  // Export PDF using jsPDF and html2canvas
+  // Export PDF using browser print functionality (works better with CSS styling)
   const handleExportPDF = async () => {
     try {
       // Save current content first
@@ -120,85 +123,56 @@ export default function Editor() {
       // Show export progress
       setIsExporting(true);
       
-      // First, create a temporary rendering of all slides
+      // Set print mode on
       setIsPrinting(true);
       
-      // Wait for the slides to render
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Let the browser render the slides with proper theme styling
+      await new Promise(resolve => setTimeout(resolve, 500));
       
-      // Get all slide elements
-      const slideElements = document.querySelectorAll('.print-slide');
-      
-      if (!slideElements.length) {
-        alert('No slides found to export');
-        setIsPrinting(false);
-        setIsExporting(false);
-        return;
-      }
-      
-      try {
-        // Try using jsPDF first
-        const jsPDFClass = (await jsPDFModule).default;
-        
-        // Create a new PDF in landscape orientation
-        const pdf = new jsPDFClass({
-          orientation: 'landscape',
-          unit: 'mm',
-          format: 'a4'
-        });
-        
-        // Process each slide
-        for (let i = 0; i < slideElements.length; i++) {
-          try {
-            const canvas = await html2canvas(slideElements[i], {
-              scale: 2, // Higher scale for better quality
-              useCORS: true,
-              logging: false
-            });
-            
-            // Convert canvas to an image
-            const imgData = canvas.toDataURL('image/jpeg', 1.0);
-            
-            // Add a new page for slides after the first one
-            if (i > 0) {
-              pdf.addPage();
-            }
-            
-            // Calculate the dimensions to maintain aspect ratio but fill the page
-            const pdfWidth = pdf.internal.pageSize.getWidth();
-            const pdfHeight = pdf.internal.pageSize.getHeight();
-            
-            // Add the image to the PDF
-            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidth, pdfHeight);
-          } catch (err) {
-            console.error(`Error processing slide ${i + 1}:`, err);
+      // Add extra print-specific styles to force background colors
+      const style = document.createElement('style');
+      style.innerHTML = `
+        @media print {
+          body { 
+            -webkit-print-color-adjust: exact !important; 
+            print-color-adjust: exact !important; 
+            color-adjust: exact !important;
+          }
+          
+          /* Color-specific overrides for print */
+          .dark-theme, .dark-theme .slide-container, .dark-theme .slide-content {
+            background-color: #1e293b !important;
+            color: #e2e8f0 !important;
+          }
+          
+          .dark-theme h1, .dark-theme h2, .dark-theme h3, .dark-theme h4, .dark-theme h5, .dark-theme h6 {
+            color: #60a5fa !important;
+          }
+          
+          /* Force all child elements in dark theme to preserve colors */
+          .dark-theme * {
+            color-adjust: exact !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
           }
         }
-        
-        // Save the PDF
-        pdf.save(`${deck.title || 'Presentation'}.pdf`);
-      } catch (jsPDFError) {
-        console.error('jsPDF error:', jsPDFError);
-        
-        // Fallback: Use print function as a last resort
-        window.print();
-      }
-    } catch (err) {
-      console.error('PDF export error:', err);
-      alert('Error exporting PDF: ' + err.message);
+      `;
+      document.head.appendChild(style);
       
-      // Try browser print as a fallback
-      try {
-        window.print();
-      } catch (printErr) {
-        console.error('Print fallback failed:', printErr);
-      }
-    } finally {
-      // Delay resetting to ensure print dialog has time to open
+      // Use browser's print function
+      window.print();
+      
+      // Cleanup after printing
       setTimeout(() => {
+        document.head.removeChild(style);
         setIsPrinting(false);
         setIsExporting(false);
       }, 1000);
+    } catch (err) {
+      console.error('PDF export error:', err);
+      alert('Error exporting PDF: ' + err.message);
+      setIsPrinting(false);
+      setIsExporting(false);
     }
   };
   
@@ -206,6 +180,40 @@ export default function Editor() {
   const handlePrintPDF = () => {
     // Save current content first
     saveCurrentSlideContent();
+    
+    // Add extra CSS for print styling
+    const style = document.createElement('style');
+    style.innerHTML = `
+      @media print {
+        body { background-color: white; }
+        
+        /* Style each slide's content based on its theme */
+        .print-slide.dark-theme .slide-content {
+          background-color: #1e293b !important;
+          color: #e2e8f0 !important;
+        }
+        
+        .print-slide.light-theme .slide-content {
+          background-color: #f8fafc !important;
+          color: #334155 !important;
+        }
+        
+        /* Make sure the slide fills the page */
+        .slide-for-print {
+          break-after: page;
+          height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        /* Hide UI elements */
+        .format-buttons, .sidebar, header, footer, nav {
+          display: none !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
     
     // Set printing mode to show all slides
     setIsPrinting(true);
@@ -216,9 +224,127 @@ export default function Editor() {
       // Restore normal view after print dialog is closed or after timeout
       setTimeout(() => {
         setIsPrinting(false);
+        document.head.removeChild(style);
       }, 1000);
     }, 500);
   };
+
+  // Apply formatting to selected text in the editable area
+  const formatText = (command, value = null) => {
+    // Make sure the editable area is focused
+    if (editableRef.current) {
+      // Store the current selection
+      const selection = window.getSelection();
+      const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+      
+      // Focus the editable area
+      editableRef.current.focus();
+      
+      // If there was no selection or it was outside our editor, place cursor at the end
+      if (!range || !editableRef.current.contains(range.commonAncestorContainer)) {
+        const newRange = document.createRange();
+        newRange.selectNodeContents(editableRef.current);
+        newRange.collapse(false); // Collapse to the end
+        selection.removeAllRanges();
+        selection.addRange(newRange);
+      }
+      
+      // Special handling for certain commands
+      if (command === 'fontSize') {
+        document.execCommand('fontSize', false, value);
+      } else if (command === 'foreColor') {
+        document.execCommand('foreColor', false, value);
+      } else if (command === 'fontName') {
+        document.execCommand('fontName', false, value);
+      } else if (command === 'backColor') {
+        document.execCommand('backColor', false, value);
+      } else if (command === 'createLink') {
+        const url = prompt('Enter URL:', 'https://');
+        if (url) {
+          document.execCommand('createLink', false, url);
+        }
+      } else if (command === 'insertImage') {
+        const url = prompt('Enter image URL:', 'https://');
+        if (url) {
+          document.execCommand('insertImage', false, url);
+        }
+      } else if (command === 'removeFormat') {
+        // More thorough removal of formatting
+        document.execCommand('removeFormat', false, null);
+        document.execCommand('unlink', false, null);
+      } else {
+        // Use standard execCommand for other commands
+        try {
+          document.execCommand(command, false, value);
+        } catch (error) {
+          console.error(`Error applying ${command} format:`, error);
+        }
+      }
+      
+      // Save the changes after formatting
+      setTimeout(() => {
+        saveCurrentSlideContent();
+        // Re-focus the editable area
+        editableRef.current.focus();
+      }, 100);
+    }
+  };
+
+  // Add keyboard shortcut handling
+  useEffect(() => {
+    const handleKeyboardShortcuts = (e) => {
+      // Only process if editor has focus
+      if (!editorHasFocus) return;
+      
+      // Ctrl/Cmd + key combinations
+      if (e.ctrlKey || e.metaKey) {
+        switch (e.key.toLowerCase()) {
+          case 'b':
+            e.preventDefault();
+            formatText('bold');
+            break;
+          case 'i':
+            e.preventDefault();
+            formatText('italic');
+            break;
+          case 'u':
+            e.preventDefault();
+            formatText('underline');
+            break;
+          case 'l':
+            e.preventDefault();
+            formatText('createLink');
+            break;
+          case 'k':
+            e.preventDefault();
+            formatText('insertImage');
+            break;
+          case 's':
+            e.preventDefault();
+            handleSave();
+            break;
+          case '1':
+            e.preventDefault();
+            formatText('formatBlock', '<h1>');
+            break;
+          case '2':
+            e.preventDefault();
+            formatText('formatBlock', '<h2>');
+            break;
+          case '0':
+            e.preventDefault();
+            formatText('formatBlock', '<p>');
+            break;
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyboardShortcuts);
+    return () => window.removeEventListener('keydown', handleKeyboardShortcuts);
+  }, [editorHasFocus]);
+
+  // Add a help tooltip for keyboard shortcuts
+  const [showShortcuts, setShowShortcuts] = useState(false);
 
   useEffect(() => {
     // When the current slide changes, focus the editable content
@@ -235,6 +361,83 @@ export default function Editor() {
     slideRefs.current = slides.map(() => React.createRef());
   }, [slides.length]);
 
+  // Add stylesheet for print mode and themes
+  useEffect(() => {
+    const style = document.createElement('style');
+    style.innerHTML = `
+      @media print {
+        body {
+          margin: 0;
+          padding: 0;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+        .print-slide {
+          page-break-after: always;
+          height: 100vh;
+          width: 100%;
+          display: block;
+          box-shadow: none !important;
+          border: none !important;
+        }
+        /* Theme styles for print */
+        .dark-theme {
+          background-color: #1e293b !important;
+          color: #e2e8f0 !important;
+        }
+        .dark-theme h1, .dark-theme h2, .dark-theme h3 {
+          color: #60a5fa !important;
+        }
+        .dark-theme a {
+          color: #818cf8 !important;
+        }
+        .light-theme {
+          background-color: #f8fafc !important;
+          color: #334155 !important;
+        }
+        .light-theme h1, .light-theme h2, .light-theme h3 {
+          color: #1e40af !important;
+        }
+        
+        /* Force background colors to print */
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        
+        @page {
+          margin: 0;
+          size: landscape;
+        }
+      }
+      
+      /* Theme styles for screen display */
+      .dark-theme {
+        background-color: #1e293b;
+        color: #e2e8f0;
+      }
+      .dark-theme h1, .dark-theme h2, .dark-theme h3 {
+        color: #60a5fa;
+      }
+      .dark-theme a {
+        color: #818cf8;
+      }
+      .light-theme {
+        background-color: #f8fafc;
+        color: #334155;
+      }
+      .light-theme h1, .light-theme h2, .light-theme h3 {
+        color: #1e40af;
+      }
+    `;
+    document.head.appendChild(style);
+
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   if (loading) return <div>Loading...</div>;
   if (error) return <div className="text-red-600">{error}</div>;
   if (!deck) return <div>Deck not found</div>;
@@ -245,34 +448,34 @@ export default function Editor() {
       {!isPrinting && (
         <div className="w-64 bg-gray-900 p-4 overflow-y-auto text-white">
           <h2 className="text-xl font-bold mb-4 text-blue-400">{deck.title}</h2>
-          <div className="space-y-2">
-            {slides.map((slide, index) => (
-              <button
-                key={index}
-                onClick={() => handleSlideChange(index)}
-                className={`w-full p-2 text-left rounded ${
+        <div className="space-y-2">
+          {slides.map((slide, index) => (
+            <button
+              key={index}
+              onClick={() => handleSlideChange(index)}
+              className={`w-full p-2 text-left rounded ${
                   currentSlide === index ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
-                }`}
-              >
-                Slide {index + 1}
-              </button>
-            ))}
-          </div>
+              }`}
+            >
+              Slide {index + 1}
+            </button>
+          ))}
+        </div>
           <div className="mt-6 space-y-2">
-            <button
-              onClick={handleSave}
+        <button
+          onClick={handleSave}
               className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-            >
-              Save Changes
-            </button>
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating}
+        >
+          Save Changes
+        </button>
+        <button
+          onClick={handleGenerate}
+          disabled={isGenerating}
               className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 disabled:bg-gray-600 transition"
-            >
-              {isGenerating ? 'Generating...' : 'Generate with AI'}
-            </button>
-            <button
+        >
+          {isGenerating ? 'Generating...' : 'Generate with AI'}
+        </button>
+        <button
               onClick={handleExportPDF}
               disabled={isExporting}
               className="w-full bg-teal-600 text-white py-2 rounded hover:bg-teal-700 transition disabled:bg-gray-500"
@@ -322,48 +525,87 @@ export default function Editor() {
           {isPrinting ? (
             // All slides for PDF export
             <div className="print-all-slides">
-              {slides.map((slide, index) => (
-                <div key={index} className="slide-for-print mb-10">
-                  <div 
-                    className="bg-white rounded-lg shadow-2xl overflow-hidden print-slide"
-                    style={{ 
-                      aspectRatio: '16/9',
-                      border: '1px solid #2d3748',
-                      boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.3)',
-                      marginBottom: '50px'
+              {slides.map((slide, index) => {
+                const slideTheme = slide.theme || deck.theme || 'light';
+                const themeClass = slideTheme === 'dark' ? 'dark-theme' : 'light-theme';
+                const bgColor = slideTheme === 'dark' ? '#1e293b' : '#f8fafc';
+                const textColor = slideTheme === 'dark' ? '#e2e8f0' : '#334155';
+                const headingColor = slideTheme === 'dark' ? '#60a5fa' : '#1e40af';
+                
+                // Apply inline styles directly to ensure they persist in print
+                let content = slide.content || '';
+                
+                // For dark theme, make sure colors are enforced inline
+                if (slideTheme === 'dark' && !content.includes('style="background-color: #1e293b')) {
+                  if (content.includes('<div')) {
+                    // Add background color to main div
+                    content = content.replace(/<div/, `<div style="background-color: #1e293b !important; color: #e2e8f0 !important;" `);
+                    
+                    // Style headings and paragraphs
+                    content = content
+                      .replace(/<h1/g, `<h1 style="color: ${headingColor} !important;" `)
+                      .replace(/<h2/g, `<h2 style="color: ${headingColor} !important;" `)
+                      .replace(/<h3/g, `<h3 style="color: ${headingColor} !important;" `);
+                  } else {
+                    // Wrap content in a styled div if no div exists
+                    content = `<div style="background-color: #1e293b !important; color: #e2e8f0 !important; width: 100%; height: 100%; padding: 30px;">${content}</div>`;
+                  }
+                }
+                
+                return (
+                  <div key={index} className={`slide-for-print mb-10 ${themeClass}`}
+                    style={{
+                      marginBottom: '50px',
+                      breakAfter: 'page'
                     }}
                   >
-                    <div
-                      className="slide-container"
-                      style={{
-                        position: 'relative',
+                    <div 
+                      className={`print-slide ${themeClass}`}
+                      style={{ 
+                        aspectRatio: '16/9',
+                        backgroundColor: bgColor,
+                        color: textColor,
                         width: '100%',
-                        height: '100%'
+                        height: 'calc(100vh - 100px)',
+                        overflow: 'hidden',
+                        position: 'relative'
                       }}
                     >
-                      <div 
-                        dangerouslySetInnerHTML={{ __html: slide.content || '' }}
-                        className="slide-content"
+                      <div
+                        className={`slide-container ${themeClass}`}
                         style={{
                           position: 'absolute',
                           top: 0,
                           left: 0,
-                          right: 0, 
+                          right: 0,
                           bottom: 0,
-                          overflow: 'hidden'
+                          backgroundColor: bgColor,
+                          color: textColor
                         }}
-                      />
+                      >
+                        <div 
+                          dangerouslySetInnerHTML={{ __html: content }}
+                          className={`slide-content ${themeClass}`}
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            overflow: 'hidden',
+                            backgroundColor: bgColor,
+                            color: textColor
+                          }}
+                        />
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             // Single editable slide
             <div className="slide-frame">
               <div 
                 ref={pdfRef} 
-                className="bg-white rounded-lg shadow-2xl overflow-hidden"
+                className={`bg-white rounded-lg shadow-2xl overflow-hidden ${slides[currentSlide]?.theme === 'dark' ? 'dark-theme' : 'light-theme'}`}
                 style={{ 
                   aspectRatio: '16/9',
                   border: '1px solid #2d3748',
@@ -375,7 +617,8 @@ export default function Editor() {
                   style={{
                     position: 'relative',
                     width: '100%',
-                    height: '100%'
+                    height: '100%',
+                    backgroundColor: slides[currentSlide]?.theme === 'dark' ? '#1e293b' : '#f8fafc'
                   }}
                 >
                   <div 
@@ -390,9 +633,30 @@ export default function Editor() {
                       right: 0, 
                       bottom: 0,
                       overflow: 'auto',
-                      outline: 'none'
+                      outline: 'none',
+                      padding: '10px',
+                      backgroundColor: slides[currentSlide]?.theme === 'dark' ? '#1e293b' : '#f8fafc',
+                      color: slides[currentSlide]?.theme === 'dark' ? '#e2e8f0' : '#334155'
                     }}
-                    onBlur={saveCurrentSlideContent}
+                    onFocus={() => setEditorHasFocus(true)}
+                    onBlur={(e) => {
+                      // Only set focus to false if we're not clicking on a formatting button
+                      if (!e.relatedTarget || !e.relatedTarget.closest('.format-buttons')) {
+                        setEditorHasFocus(false);
+                        saveCurrentSlideContent();
+                      }
+                    }}
+                    onInput={saveCurrentSlideContent}
+                    onKeyDown={(e) => {
+                      // Save on Enter or key combinations
+                      if (e.key === 'Enter' || (e.ctrlKey && e.key === 's')) {
+                        setTimeout(saveCurrentSlideContent, 0);
+                        if (e.ctrlKey && e.key === 's') {
+                          e.preventDefault();
+                          handleSave();
+                        }
+                      }
+                    }}
                   />
                 </div>
               </div>
@@ -401,70 +665,180 @@ export default function Editor() {
 
           {/* Basic formatting toolbar - Hide when printing */}
           {!isPrinting && (
-            <div className="mt-4 bg-gray-800 rounded p-2 flex flex-wrap gap-2 justify-center">
+            <div className="mt-4 bg-gray-800 rounded p-2 flex flex-wrap gap-2 justify-center format-buttons relative">
+              <div className="flex gap-2 mb-2 w-full justify-center">
+                <button 
+                  className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+                  onClick={() => formatText('bold')}
+                  title="Bold"
+                >
+                  <strong>B</strong>
+                </button>
+                <button 
+                  className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+                  onClick={() => formatText('italic')}
+                  title="Italic"
+                >
+                  <em>I</em>
+                </button>
+                <button 
+                  className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+                  onClick={() => formatText('underline')}
+                  title="Underline"
+                >
+                  <u>U</u>
+                </button>
+                <select 
+                  className="bg-gray-700 text-white rounded px-2"
+                  onChange={(e) => formatText('formatBlock', e.target.value)}
+                  title="Heading"
+                  defaultValue=""
+                >
+                  <option value="" disabled>Format</option>
+                  <option value="<p>">Paragraph</option>
+                  <option value="<h1>">Heading 1</option>
+                  <option value="<h2>">Heading 2</option>
+                  <option value="<h3>">Heading 3</option>
+                </select>
+                <select 
+                  className="bg-gray-700 text-white rounded px-2"
+                  onChange={(e) => formatText('fontSize', e.target.value)}
+                  title="Font Size"
+                  defaultValue=""
+                >
+                  <option value="" disabled>Size</option>
+                  <option value="1">Small</option>
+                  <option value="3">Normal</option>
+                  <option value="5">Large</option>
+                  <option value="7">Huge</option>
+                </select>
+              </div>
+              
+              <div className="flex gap-2 mb-2 w-full justify-center">
+                <select 
+                  className="bg-gray-700 text-white rounded px-2"
+                  onChange={(e) => formatText('fontName', e.target.value)}
+                  title="Font"
+                  defaultValue=""
+                >
+                  <option value="" disabled>Font</option>
+                  <option value="Arial, sans-serif">Arial</option>
+                  <option value="Times New Roman, serif">Times New Roman</option>
+                  <option value="Courier New, monospace">Courier New</option>
+                  <option value="Georgia, serif">Georgia</option>
+                  <option value="Verdana, sans-serif">Verdana</option>
+                </select>
+                <button 
+                  className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+                  onClick={() => formatText('insertUnorderedList')}
+                  title="Bullet List"
+                >
+                  • List
+                </button>
+                <button 
+                  className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+                  onClick={() => formatText('insertOrderedList')}
+                  title="Numbered List"
+                >
+                  1. List
+                </button>
+                <button 
+                  className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+                  onClick={() => formatText('createLink')}
+                  title="Insert Link"
+                >
+                  🔗 Link
+                </button>
+                <button 
+                  className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+                  onClick={() => formatText('insertImage')}
+                  title="Insert Image"
+                >
+                  🖼️ Image
+                </button>
+              </div>
+              
+              <div className="flex gap-2 w-full justify-center">
+                <div className="flex gap-1">
+                  <button 
+                    className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+                    onClick={() => formatText('justifyLeft')}
+                    title="Left Align"
+                  >
+                    ⬅️
+                  </button>
+                  <button 
+                    className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+                    onClick={() => formatText('justifyCenter')}
+                    title="Center"
+                  >
+                    ⬆️
+                  </button>
+                  <button 
+                    className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
+                    onClick={() => formatText('justifyRight')}
+                    title="Right Align"
+                  >
+                    ➡️
+        </button>
+      </div>
+
+                <div className="flex gap-1">
+                  <input 
+                    type="color" 
+                    className="w-8 h-8 rounded cursor-pointer"
+                    onChange={(e) => formatText('foreColor', e.target.value)}
+                    title="Text Color"
+                  />
+                  <input 
+                    type="color" 
+                    defaultValue="#ffffff"
+                    className="w-8 h-8 rounded cursor-pointer"
+                    onChange={(e) => formatText('backColor', e.target.value)}
+                    title="Background Color"
+                  />
+                </div>
+                
+                <button 
+                  className="text-white bg-red-700 px-3 py-1 rounded hover:bg-red-600"
+                  onClick={() => formatText('removeFormat')}
+                  title="Clear Formatting"
+                >
+                  Clear Format
+                </button>
+              </div>
+
+              {/* Help button to show keyboard shortcuts - positioned in top right */}
               <button 
-                className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
-                onClick={() => document.execCommand('bold')}
-                title="Bold"
+                className="absolute right-2 top-2 text-white bg-blue-600 px-2 py-1 rounded hover:bg-blue-700 text-sm"
+                onClick={() => setShowShortcuts(!showShortcuts)}
+                title="Keyboard Shortcuts"
               >
-                Bold
+                ⌨️
               </button>
-              <button 
-                className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
-                onClick={() => document.execCommand('italic')}
-                title="Italic"
-              >
-                Italic
-              </button>
-              <button 
-                className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
-                onClick={() => document.execCommand('formatBlock', false, 'h1')}
-                title="Heading 1"
-              >
-                H1
-              </button>
-              <button 
-                className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
-                onClick={() => document.execCommand('formatBlock', false, 'h2')}
-                title="Heading 2"
-              >
-                H2
-              </button>
-              <button 
-                className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
-                onClick={() => document.execCommand('formatBlock', false, 'p')}
-                title="Paragraph"
-              >
-                Paragraph
-              </button>
-              <button 
-                className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
-                onClick={() => document.execCommand('insertUnorderedList')}
-                title="Bullet List"
-              >
-                • List
-              </button>
-              <button 
-                className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
-                onClick={() => document.execCommand('insertOrderedList')}
-                title="Numbered List"
-              >
-                1. List
-              </button>
-              <button 
-                className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
-                onClick={() => document.execCommand('justifyCenter')}
-                title="Center"
-              >
-                Center
-              </button>
-              <button 
-                className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
-                onClick={() => document.execCommand('justifyLeft')}
-                title="Left Align"
-              >
-                Left
-              </button>
+
+              {showShortcuts && (
+                <div className="absolute bg-gray-900 text-white p-4 rounded shadow-lg z-10 right-0 top-[-280px] max-w-xs border border-gray-700">
+                  <h3 className="font-bold mb-2 border-b pb-1">Keyboard Shortcuts</h3>
+                  <ul className="text-sm">
+                    <li className="mb-1"><strong>Ctrl+B</strong>: Bold</li>
+                    <li className="mb-1"><strong>Ctrl+I</strong>: Italic</li>
+                    <li className="mb-1"><strong>Ctrl+U</strong>: Underline</li>
+                    <li className="mb-1"><strong>Ctrl+L</strong>: Insert Link</li>
+                    <li className="mb-1"><strong>Ctrl+K</strong>: Insert Image</li>
+                    <li className="mb-1"><strong>Ctrl+1</strong>: Heading 1</li>
+                    <li className="mb-1"><strong>Ctrl+2</strong>: Heading 2</li>
+                    <li className="mb-1"><strong>Ctrl+0</strong>: Paragraph</li>
+                    <li className="mb-1"><strong>Ctrl+S</strong>: Save</li>
+                  </ul>
+                  <button 
+                    className="mt-2 bg-blue-600 text-white px-2 py-1 rounded text-xs w-full"
+                    onClick={() => setShowShortcuts(false)}
+                  >
+                    Close
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
