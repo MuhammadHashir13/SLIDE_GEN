@@ -23,6 +23,7 @@ mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/slidegen'
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/slides', require('./routes/slides'));
 app.use('/api/decks', require('./routes/decks'));
+app.use('/api/generate-slides', require('./routes/generate-slides'));
 
 // Error handling middleware
 app.use((err, req, res, next) => {

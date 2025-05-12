@@ -59,7 +59,7 @@ router.post('/', auth, async (req, res) => {
 // Update a deck
 router.put('/:id', auth, async (req, res) => {
   try {
-    const { title, description, theme, isPublic } = req.body;
+    const { title, description, theme, isPublic, slides } = req.body;
 
     const deck = await Deck.findOne({
       _id: req.params.id,
@@ -70,16 +70,21 @@ router.put('/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Deck not found' });
     }
 
-    Object.assign(deck, {
-      title,
-      description,
-      theme,
-      isPublic
-    });
+    // Update deck properties if provided
+    if (title !== undefined) deck.title = title;
+    if (description !== undefined) deck.description = description;
+    if (theme !== undefined) deck.theme = theme;
+    if (isPublic !== undefined) deck.isPublic = isPublic;
+    
+    // Update slides if provided
+    if (slides) {
+      deck.slides = slides;
+    }
 
     await deck.save();
     res.json(deck);
   } catch (error) {
+    console.error('Error updating deck:', error);
     res.status(500).json({ message: 'Error updating deck', error: error.message });
   }
 });

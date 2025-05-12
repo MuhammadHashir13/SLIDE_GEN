@@ -3,6 +3,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  --slide-heading-color: #1e40af;
+  --slide-text-color: #334155;
+  --slide-bg-color: #f8fafc;
 }
 
 @theme inline {
@@ -23,4 +26,221 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* Slide content styling */
+.slide-content {
+  font-family: Arial, sans-serif;
+  padding: 60px;
+  background-color: var(--slide-bg-color);
+  color: var(--slide-text-color);
+  font-size: 24px;
+  height: 100%;
+  width: 100%;
+}
+
+/* Editable slide specific styles */
+.editable-slide {
+  cursor: text;
+}
+
+.editable-slide:focus {
+  box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Heading styles */
+.slide-content h1 {
+  font-size: 48px;
+  margin-bottom: 40px;
+  color: var(--slide-heading-color);
+  text-align: center;
+  font-weight: bold;
+}
+
+.slide-content h2 {
+  font-size: 36px;
+  margin-bottom: 30px;
+  color: var(--slide-heading-color);
+  text-align: center;
+  font-weight: bold;
+}
+
+.slide-content h3 {
+  font-size: 30px;
+  margin-bottom: 25px;
+  color: var(--slide-heading-color);
+  font-weight: bold;
+}
+
+/* Paragraph styles */
+.slide-content p {
+  font-size: 24px;
+  margin-bottom: 25px;
+  color: var(--slide-text-color);
+  line-height: 1.5;
+}
+
+/* List styles */
+.slide-content ul,
+.slide-content ol {
+  margin-left: 40px;
+  margin-bottom: 25px;
+  font-size: 22px;
+  color: var(--slide-text-color);
+}
+
+.slide-content li {
+  margin-bottom: 20px;
+  padding-left: 10px;
+}
+
+.slide-content ul li {
+  list-style-type: disc;
+}
+
+.slide-content ol li {
+  list-style-type: decimal;
+}
+
+/* Container divs */
+.slide-content > div[style*="display: flex"] {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  width: 100%;
+  height: 100%;
+  padding: 60px;
+  background-color: var(--slide-bg-color);
+}
+
+/* Text alignment */
+.slide-content .align-center,
+.slide-content [style*="text-align: center"] {
+  text-align: center;
+}
+
+.slide-content .align-right,
+.slide-content [style*="text-align: right"] {
+  text-align: right;
+}
+
+.slide-content .align-justify,
+.slide-content [style*="text-align: justify"] {
+  text-align: justify;
+}
+
+/* Preserve styles that might get lost on paste or edit */
+.slide-content div[style*="background-color"] {
+  background-color: var(--slide-bg-color);
+}
+
+.slide-content div[style*="color"] h1,
+.slide-content div[style*="color"] h2,
+.slide-content div[style*="color"] h3 {
+  color: var(--slide-heading-color);
+}
+
+.slide-content div[style*="color"] p,
+.slide-content div[style*="color"] ul,
+.slide-content div[style*="color"] ol,
+.slide-content div[style*="color"] li {
+  color: var(--slide-text-color);
+}
+
+/* Ensure slide content takes full space */
+.slide-content {
+  width: 100%;
+  height: 100%;
+}
+
+/* Print-specific styling */
+.print-all-slides {
+  width: 100%;
+}
+
+.slide-for-print {
+  margin-bottom: 30px;
+  page-break-after: always;
+  page-break-inside: avoid;
+  break-after: page;
+  break-inside: avoid;
+}
+
+.print-slide {
+  width: 100%;
+  height: auto;
+}
+
+/* Force print styles for PDF export */
+@media print {
+  @page {
+    size: landscape;
+    margin: 0.5cm;
+  }
+  
+  body {
+    background: white !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  
+  /* Hide everything except slides */
+  body * {
+    visibility: hidden !important;
+  }
+  
+  .print-all-slides, 
+  .print-all-slides *,
+  .slide-for-print, 
+  .slide-for-print *,
+  .print-slide, 
+  .print-slide *,
+  .slide-content, 
+  .slide-content * {
+    visibility: visible !important;
+  }
+  
+  .print-all-slides {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: auto;
+  }
+  
+  .slide-for-print {
+    page-break-after: always;
+    page-break-inside: avoid;
+    break-after: page;
+    break-inside: avoid;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+  
+  .print-slide {
+    box-shadow: none !important;
+    border: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  .slide-content {
+    color: black !important;
+    background-color: white !important;
+  }
+  
+  .slide-content h1,
+  .slide-content h2,
+  .slide-content h3 {
+    color: #1e40af !important;
+  }
+  
+  .slide-content p,
+  .slide-content ul,
+  .slide-content ol,
+  .slide-content li {
+    color: #334155 !important;
+  }
 }
