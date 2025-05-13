@@ -25,6 +25,11 @@ const slideSchema = new mongoose.Schema({
     enum: ['title', 'two-column', 'full-width', 'split'],
     default: 'full-width'
   },
+  transition: {
+    type: String,
+    enum: ['fade', 'slide', 'zoom', 'flip', 'cube'],
+    default: 'fade'
+  },
   order: {
     type: Number,
     required: true

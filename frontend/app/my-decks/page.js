@@ -30,8 +30,8 @@ export default function MyDecks() {
       console.error('Error loading decks:', err);
       setError(err.message || 'Failed to load presentations');
       if (err.message && err.message.toLowerCase().includes('authenticate')) {
-        removeToken();
-        router.push('/login');
+          removeToken();
+          router.push('/login');
       }
     } finally {
       setLoading(false);
@@ -146,9 +146,9 @@ export default function MyDecks() {
           </div>
         )}
         
-        {!loading && !error && (
-          <div>
-            {decks.length === 0 ? (
+      {!loading && !error && (
+        <div>
+          {decks.length === 0 ? (
               <div className="text-center py-20 bg-white rounded-xl shadow-sm border border-gray-100">
                 <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 mx-auto text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
@@ -164,7 +164,7 @@ export default function MyDecks() {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {decks.map((deck) => (
+              {decks.map((deck) => (
                   <div key={deck._id} className="bg-white rounded-lg shadow-md border border-gray-100 overflow-hidden hover:shadow-lg transition-shadow duration-200">
                     <div className="p-6">
                       <div className="flex justify-between items-start">
@@ -229,11 +229,11 @@ export default function MyDecks() {
                       </div>
                     </div>
                   </div>
-                ))}
+              ))}
               </div>
-            )}
-          </div>
-        )}
+          )}
+        </div>
+      )}
       </div>
     </div>
   );

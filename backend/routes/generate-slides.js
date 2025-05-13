@@ -5,17 +5,55 @@ const Deck = require('../models/Deck');
 const auth = require('../middleware/auth');
 const fetch = require('node-fetch'); // Make sure to install this package if not already installed
 
-// No longer using the Google Generative AI SDK
-// const { GoogleGenerativeAI } = require('@google/generative-ai');
-// const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || 'your-api-key-here');
+// Add Unsplash API client configuration
+const UNSPLASH_ACCESS_KEY = process.env.UNSPLASH_ACCESS_KEY;
+const UNSPLASH_SECRET_KEY = process.env.UNSPLASH_SECRET_KEY;
+
+// Default fallback images by category - use these if API fails
+const FALLBACK_IMAGES = {
+  business: 'https://images.unsplash.com/photo-1664575599736-c5197c684172?w=800',
+  technology: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800',
+  nature: 'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800',
+  food: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800',
+  travel: 'https://images.unsplash.com/photo-1488085061387-422e29b40080?w=800',
+  sports: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800',
+  education: 'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800',
+  health: 'https://images.unsplash.com/photo-1505576399279-565b52d4ac71?w=800',
+  science: 'https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=800',
+  art: 'https://images.unsplash.com/photo-1579783483458-83d02161294e?w=800',
+  music: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=800',
+  finance: 'https://images.unsplash.com/photo-1565514501303-256e0ea65d49?w=800',
+  history: 'https://images.unsplash.com/photo-1461360370896-8a6edf403f35?w=800',
+  fashion: 'https://images.unsplash.com/photo-1516762689617-e1cffcef479d?w=800',
+  architecture: 'https://images.unsplash.com/photo-1481253127861-534498168948?w=800',
+  cars: 'https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?w=800',
+  space: 'https://images.unsplash.com/photo-1462331940025-496dfbfc7564?w=800',
+  animals: 'https://images.unsplash.com/photo-1437622368342-7a3d73a34c8f?w=800',
+  gaming: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800',
+  politics: 'https://images.unsplash.com/photo-1575320181282-9afab399332c?w=800',
+  religion: 'https://images.unsplash.com/photo-1507692049790-de58290a4334?w=800',
+  entertainment: 'https://images.unsplash.com/photo-1603739903239-8b6e64c3b185?w=800',
+  military: 'https://images.unsplash.com/photo-1564217296983-04f9af98c33c?w=800',
+  innovation: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800',
+  motivation: 'https://images.unsplash.com/photo-1519834785169-98be25ec3f84?w=800',
+  leadership: 'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800',
+  climate: 'https://images.unsplash.com/photo-1593990965209-125a37c20ca5?w=800',
+  development: 'https://images.unsplash.com/photo-1589793907316-f94025b52665?w=800',
+  communication: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=800',
+  default: 'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800'
+};
 
 // Generate multiple slides from a single prompt
 router.post('/', auth, async (req, res) => {
   try {
-    const { deckId, prompt, numSlides, theme } = req.body;
+    const { deckId, prompt, numSlides, theme, transition } = req.body;
+
+    // Default transition if not provided
+    const slideTransition = transition || 'fade';
 
     // Add debugging to log the theme
     console.log(`Requested theme: ${theme}, type: ${typeof theme}`);
+    console.log(`Requested transition: ${slideTransition}`);
 
     // Check if deck exists and belongs to user
     const deck = await Deck.findOne({ _id: deckId, user: req.user._id });
@@ -28,7 +66,7 @@ router.post('/', auth, async (req, res) => {
     console.log(`Generating ${numSlides} slides for deck "${deck.title}" with prompt: "${prompt}" and theme: "${slideTheme}"`);
 
     // Generate slides using Gemini API
-    const slidesData = await generateSlidesUsingGemini(deck.title, prompt, numSlides, slideTheme);
+    const slidesData = await generateSlidesUsingGemini(deck.title, prompt, numSlides, slideTheme, slideTransition);
     console.log(`Successfully generated ${slidesData.length} slides using Gemini API`);
     
     // Create the slides in the database
@@ -48,7 +86,8 @@ router.post('/', auth, async (req, res) => {
         theme: slideTheme, // Use the normalized theme
         layout,
         order: index,
-        deck: deckId
+        deck: deckId,
+        transition: slideTransition // Add transition property
       });
 
       await slide.save();
@@ -77,7 +116,7 @@ router.post('/', auth, async (req, res) => {
 });
 
 // Generate slides using Google Gemini API with direct fetch
-async function generateSlidesUsingGemini(title, prompt, numSlides, theme) {
+async function generateSlidesUsingGemini(title, prompt, numSlides, theme, transition) {
   try {
     // Validate and normalize the theme
     if (!theme || typeof theme !== 'string') {
@@ -91,7 +130,11 @@ async function generateSlidesUsingGemini(title, prompt, numSlides, theme) {
       }
     }
     
+    // Validate the transition
+    if (!transition) transition = 'fade';
+    
     console.log(`Using theme: "${theme}" for slide generation`);
+    console.log(`Using transition: "${transition}" for slides`);
     
     const apiKey = process.env.GEMINI_API_KEY || 'your-api-key-here';
     const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
@@ -112,21 +155,32 @@ Each slide should have:
 2. Properly formatted content with HTML styling
 3. Relevant, SPECIFIC information that's factually accurate
 4. Professional tone and language
+5. DO NOT INCLUDE IMAGES - our backend will add them automatically
+6. Additional content that provides depth and detail
 
 CRITICAL INSTRUCTIONS:
 - NEVER use generic placeholders like "Additional feature or benefit", "Supporting information or data", "Important Information", etc.
 - ALL content MUST be specific to the topic (${prompt})
 - Each slide should contain actual information, facts, or descriptions related to ${prompt}
+- DO NOT INCLUDE ANY IMAGE HTML TAGS OR REFERENCES - the backend system will add proper images
 - Even if you don't know specific details, make reasonable, plausible content rather than generic placeholders
 - For conclusion slides, include specific summary points about ${prompt}, not vague statements
 
 The slides should include:
-- A title slide (first slide)
-- Content slides with SPECIFIC key information
-- A conclusion/summary slide (last slide) with SPECIFIC information related to the topic, not generic placeholders
+- Content slides with SPECIFIC key information (no images - we will add them)
+- A conclusion/summary slide (last slide) with SPECIFIC information related to the topic (no images - we will add them)
 
 Use proper HTML formatting with inline CSS styling for a professional appearance.
-Wrap each slide's content in a div with padding and styling.
+Wrap each slide's content in a div with padding, styling, and transitions.
+Include these transition effects based on the selected transition type: "${transition}"
+
+Use these transition CSS classes:
+- fade: "transition-opacity duration-500 ease-in-out"
+- slide: "transition-transform duration-500 ease-in-out"
+- zoom: "transition-transform duration-500 ease-in-out transform hover:scale-105"
+- flip: "transition-transform duration-500 perspective-1000 hover:rotate-y-180"
+- cube: "transition-transform duration-700 transform-style-3d rotate-y-0 hover:rotate-y-90"
+
 Use these style guidelines based on the selected theme:
 
 ${theme === 'dark' ? 
@@ -146,18 +200,19 @@ ${theme === 'dark' ?
 
 IMPORTANT: Your response MUST include EXACTLY ${numSlides} slides, no more and no less.
 IMPORTANT: Every bullet point must contain actual content specific to ${prompt}.
+IMPORTANT: DO NOT include any <img> tags or image URLs. The system will add images separately.
 IMPORTANT: Never, under any circumstances, use placeholders like "Highlighted benefit or feature" or "Important conclusion point".
 IMPORTANT: If you cannot generate exactly ${numSlides} slides with specific content, it is better to repeat information than to use generic placeholders.
 
 Example slide content format:
 {
   "title": "Specific Title About ${prompt}",
-  "content": "<div style='display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;'><h2 style='font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;'>Specific Heading About ${prompt}</h2><p style='font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};'>Specific description about an aspect of ${prompt}</p><ul style='font-size: 20px; margin-left: 30px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};'><li style='margin-bottom: 15px;'>Specific fact about ${prompt}</li><li style='margin-bottom: 15px;'>Specific detail about ${prompt}</li></ul></div>"
+  "content": "<div class='${transition === 'fade' ? 'transition-opacity duration-500 ease-in-out' : transition === 'slide' ? 'transition-transform duration-500 ease-in-out' : transition === 'zoom' ? 'transition-transform duration-500 ease-in-out transform hover:scale-105' : transition === 'flip' ? 'transition-transform duration-500 perspective-1000 hover:rotate-y-180' : 'transition-opacity duration-500 ease-in-out'}' style='display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;'><h2 style='font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;'>Specific Heading About ${prompt}</h2><div style='margin-bottom: 30px;'><p style='font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};'>Specific description about an aspect of ${prompt}</p><ul style='font-size: 20px; margin-left: 30px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};'><li style='margin-bottom: 15px;'>Specific fact about ${prompt}</li><li style='margin-bottom: 15px;'>Specific detail about ${prompt}</li></ul></div></div>"
 }
 
 Your response should be a valid JSON array of exactly ${numSlides} slide objects.`;
 
-    const userPrompt = `Create EXACTLY ${numSlides} detailed slides about "${prompt}" with the title "${title}" using a ${theme} theme. Include specific details for all slides, especially the conclusion slide. Never use generic placeholders.`;
+    const userPrompt = `Create EXACTLY ${numSlides} detailed slides about "${prompt}" with the title "${title}" using a ${theme} theme. Include specific details and transitions for all slides. DO NOT include images - our system will add them separately.`;
     
     // Prepare the request body
     const requestBody = {
@@ -203,7 +258,7 @@ Your response should be a valid JSON array of exactly ${numSlides} slide objects
     // Look for JSON in the response
     const jsonMatch = responseText.match(/```json\n([\s\S]*?)\n```/) || 
                     responseText.match(/```\n([\s\S]*?)\n```/) ||
-                    responseText.match(/{[\s\S]*?}/);
+                    responseText.match(/\[\s*\{\s*"title"[\s\S]*?\}\s*\]/);
     
     let jsonContent = jsonMatch ? jsonMatch[1] || jsonMatch[0] : responseText;
     
@@ -213,6 +268,8 @@ Your response should be a valid JSON array of exactly ${numSlides} slide objects
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(jsonContent);
+      let slides = await processSlides(parsedResponse, numSlides, theme, transition, prompt);
+      return slides;
     } catch (jsonError) {
       console.error("JSON parse error:", jsonError);
       console.error("Attempted to parse:", jsonContent);
@@ -222,6 +279,8 @@ Your response should be a valid JSON array of exactly ${numSlides} slide objects
       if (arrayMatch) {
         try {
           parsedResponse = JSON.parse(arrayMatch[0]);
+          let slides = await processSlides(parsedResponse, numSlides, theme, transition, prompt);
+          return slides;
         } catch (arrayError) {
           console.error("Array parse error:", arrayError);
           throw new Error("Failed to parse AI response as JSON");
@@ -230,655 +289,369 @@ Your response should be a valid JSON array of exactly ${numSlides} slide objects
         throw new Error("Failed to parse AI response as JSON");
       }
     }
-    
-    // Process the slides from the response
-    let slides;
-    if (Array.isArray(parsedResponse.slides)) {
-      slides = parsedResponse.slides;
-    } else if (Array.isArray(parsedResponse)) {
-      slides = parsedResponse;
-    } else if (typeof parsedResponse === 'object') {
-      // Try to extract slides from object properties
-      slides = [];
-      Object.keys(parsedResponse).forEach(key => {
-        if (key.startsWith('slide') && typeof parsedResponse[key] === 'object') {
-          slides.push(parsedResponse[key]);
-        }
-      });
-    }
-    
-    // Make sure we have exactly the requested number of slides
-    if (!slides || !Array.isArray(slides)) {
-      throw new Error(`Invalid slide format returned from AI model`);
-    }
-    
-    // If we don't have enough slides, make another API call to get more
-    if (slides.length < numSlides) {
-      // Make another API call with a more focused prompt to get the remaining slides
-      const remainingSlides = numSlides - slides.length;
-      console.log(`API generated only ${slides.length} slides, but ${numSlides} were requested. Making another API call for the remaining ${remainingSlides} slides.`);
-      
-      let attemptCount = 0;
-      const maxAttempts = 3;
-      
-      while (slides.length < numSlides && attemptCount < maxAttempts) {
-        attemptCount++;
-        console.log(`Attempt ${attemptCount} to generate the remaining ${numSlides - slides.length} slides...`);
-        
-        try {
-          // Craft a more specific prompt focused on getting the remaining slides
-          // Format instructions become more explicit with each attempt
-          let specificPrompt;
-          
-          if (attemptCount === 1) {
-            specificPrompt = `You are a presentation expert. Create EXACTLY ${numSlides - slides.length} more detailed slides about "${prompt}" with the theme "${theme}". 
-Each slide MUST contain SPECIFIC factual information about ${prompt}, never generic placeholders.
-Return your response as a valid JSON array of slide objects.`;
-          } else if (attemptCount === 2) {
-            specificPrompt = `Generate ${numSlides - slides.length} specific slides about "${prompt}". 
-FORMAT: Return ONLY a valid JSON array with this exact structure:
-[
-  {
-    "title": "Specific Title About ${prompt}",
-    "content": "<div style='padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'};'><h2 style='color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};'>Specific Heading</h2><p>Specific content about ${prompt}</p></div>"
-  }
-]`;
-          } else {
-            // Last attempt - extremely simplified prompt
-            specificPrompt = `Create ${numSlides - slides.length} slides about ${prompt}. Return ONLY valid JSON like this: 
-[{"title":"Slide Title","content":"<div style='padding:60px'><h2>Heading</h2><p>Content</p></div>"}]`;
-          }
-          
-          // Make another API call with the specific prompt
-          const response = await fetch(apiUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              contents: [{
-                parts: [
-                  { text: specificPrompt }
-                ]
-              }]
-            })
-          });
-          
-          if (!response.ok) {
-            console.log(`API request attempt ${attemptCount} failed with status ${response.status}`);
-            continue; // Try again with a different prompt
-          }
-          
-          const data = await response.json();
-          const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-          
-          // Try multiple approaches to extract valid JSON
-          let additionalSlides = [];
-          let extractionSuccessful = false;
-          
-          // Extraction approach 1: Look for JSON blocks
-          const jsonFormats = [
-            /```json\n([\s\S]*?)\n```/, 
-            /```\n([\s\S]*?)\n```/,
-            /\[\s*\{\s*"title"[\s\S]*?\}\s*\]/
-          ];
-          
-          for (const format of jsonFormats) {
-            try {
-              const match = responseText.match(format);
-              if (match) {
-                const jsonContent = match[1] || match[0];
-                const cleanedJson = jsonContent.replace(/```json|```/g, '').trim();
-                const parsed = JSON.parse(cleanedJson);
-                
-                if (Array.isArray(parsed)) {
-                  additionalSlides = parsed;
-                  extractionSuccessful = true;
-                  console.log(`Successfully parsed JSON using format ${format}`);
-                  break;
-                } else if (parsed.slides && Array.isArray(parsed.slides)) {
-                  additionalSlides = parsed.slides;
-                  extractionSuccessful = true;
-                  console.log(`Successfully parsed JSON with slides property`);
-                  break;
-                }
-              }
-            } catch (e) {
-              console.log(`JSON extraction attempt failed: ${e.message}`);
-            }
-          }
-          
-          // Extraction approach 2: If no JSON found, try to create it from the text
-          if (!extractionSuccessful) {
-            console.log("Attempting to extract slides from non-JSON response");
-            try {
-              // Look for patterns like "## Slide 1" or "Slide 1:" to break into slides
-              const slideMatches = responseText.match(/(?:##\s*Slide\s*\d+|Slide\s*\d+\s*:|Title:\s*.*?\n)/g);
-              
-              if (slideMatches && slideMatches.length > 0) {
-                const slideTexts = responseText.split(/(?:##\s*Slide\s*\d+|Slide\s*\d+\s*:|Title:\s*.*?\n)/g).slice(1);
-                
-                for (let i = 0; i < slideTexts.length && additionalSlides.length < (numSlides - slides.length); i++) {
-                  const slideText = slideTexts[i].trim();
-                  
-                  // Extract title - look for the first line or a title pattern
-                  let title = slideText.split('\n')[0].replace(/^[#\s*]*/, '').trim();
-                  if (!title || title.length < 3) {
-                    title = `${prompt} - Key Point ${i+1}`;
-                  }
-                  
-                  // Create HTML content with the appropriate theme
-                  const content = `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-                    <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">${title}</h2>
-                    <div style="font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-                      ${slideText.replace(/\n/g, '<br>')}
-                    </div>
-                  </div>`;
-                  
-                  // Log the theme being applied to this slide
-                  console.log(`Created slide with theme: ${theme}`);
-                  
-                  additionalSlides.push({
-                    title: title,
-                    content: content
-                  });
-                }
-                
-                if (additionalSlides.length > 0) {
-                  extractionSuccessful = true;
-                  console.log(`Created ${additionalSlides.length} slides from text content`);
-                }
-              }
-            } catch (e) {
-              console.log(`Text-based extraction failed: ${e.message}`);
-            }
-          }
-          
-          // If we got any slides, add them to our collection
-          if (additionalSlides.length > 0) {
-            const neededSlides = Math.min(additionalSlides.length, numSlides - slides.length);
-            for (let i = 0; i < neededSlides; i++) {
-              slides.push(additionalSlides[i]);
-            }
-            console.log(`Added ${neededSlides} slides from attempt ${attemptCount}`);
-          }
-          
-          // If we have enough slides, break out of the retry loop
-          if (slides.length >= numSlides) {
-            console.log(`Successfully generated all ${numSlides} slides`);
-            break;
-          }
-          
-        } catch (error) {
-          console.log(`Attempt ${attemptCount} failed: ${error.message}`);
-          // Continue to next attempt rather than throwing
-        }
-      }
-      
-      // If we still don't have enough slides after all attempts, create simplified ones
-      if (slides.length < numSlides) {
-        console.log(`Could not generate all ${numSlides} slides after ${maxAttempts} attempts. Creating simple slides to fill the gap with theme: ${theme}`);
-        
-        // Fill remaining slides with simplified content
-        const remaining = numSlides - slides.length;
-        for (let i = 0; i < remaining; i++) {
-          const slideNumber = slides.length + 1;
-          const slideTitle = `${prompt} - Point ${slideNumber}`;
-          
-          // Get theme-specific background and text colors
-          const bgColor = theme === 'dark' ? '#1e293b' : '#f8fafc';
-          const headingColor = theme === 'dark' ? '#60a5fa' : '#1e40af';
-          const textColor = theme === 'dark' ? '#e2e8f0' : '#334155';
-          const accentColor = theme === 'dark' ? '#818cf8' : '#2563eb';
-          
-          console.log(`Creating fallback slide ${slideNumber} with theme: ${theme}, bgColor: ${bgColor}, headingColor: ${headingColor}`);
-          
-          slides.push({
-            title: slideTitle,
-            content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${bgColor}; font-family: Arial, sans-serif;">
-              <h2 style="font-size: 36px; margin-bottom: 30px; color: ${headingColor}; text-align: center;">${slideTitle}</h2>
-              <p style="font-size: 24px; margin-bottom: 25px; color: ${textColor};">
-                Information about ${prompt} related to point ${slideNumber}.
-              </p>
-            </div>`
-          });
-        }
-      }
-    }
-    
-    // If we have too many slides, trim to the exact number requested
-    if (slides.length > numSlides) {
-      slides = slides.slice(0, numSlides);
-    }
-    
-    return slides;
   } catch (error) {
     console.error("Error using Gemini API:", error);
     throw error;
   }
 }
 
-// Extract slides from various potential response formats
-function extractSlidesFromResponse(parsedResponse, numSlides, title) {
-  // Check various possible response formats
-  if (Array.isArray(parsedResponse)) {
-    return parsedResponse; // Direct array of slides
-  }
+// Process slides to ensure they have all necessary elements
+async function processSlides(parsedResponse, numSlides, theme, transition, prompt) {
+  let slides = [];
   
-  if (parsedResponse.data && Array.isArray(parsedResponse.data)) {
-    return parsedResponse.data;
-  }
-  
-  if (parsedResponse.slides && Array.isArray(parsedResponse.slides)) {
-    return parsedResponse.slides;
-  }
-  
-  if (parsedResponse.content && Array.isArray(parsedResponse.content)) {
-    return parsedResponse.content;
-  }
-  
-  // If no proper array found, try to construct from object properties
-  const slides = [];
-  let slideCount = 0;
-  
-  // Look for properties like slide1, slide2, etc.
-  Object.keys(parsedResponse).forEach(key => {
-    if (key.startsWith('slide') && slideCount < numSlides) {
-      if (typeof parsedResponse[key] === 'object') {
+  // Extract slides from the response
+  if (Array.isArray(parsedResponse.slides)) {
+    slides = parsedResponse.slides;
+  } else if (Array.isArray(parsedResponse)) {
+    slides = parsedResponse;
+  } else if (typeof parsedResponse === 'object') {
+    // Try to extract slides from object properties
+    slides = [];
+    Object.keys(parsedResponse).forEach(key => {
+      if (key.startsWith('slide') && typeof parsedResponse[key] === 'object') {
         slides.push(parsedResponse[key]);
-      } else {
-        // If it's just a string, try to create a slide object
-        slides.push({
-          title: `Slide ${slideCount + 1}`,
-          content: parsedResponse[key]
-        });
       }
-      slideCount++;
-    }
-  });
-  
-  // If we found slides, return them
-  if (slides.length > 0) {
-    return slides;
+    });
   }
   
-  // Last resort: create a fallback with the data we have
-  console.warn("Could not extract slides from response, using fallback");
-  return createBasicSlideStructure(title, numSlides, parsedResponse.toString());
-}
-
-// Helper function to create a basic slide structure
-function createBasicSlideStructure(deckTitle, numSlides, prompt) {
-  // Generate more meaningful content based on common topics
-  const topics = extractTopicsFromPrompt(prompt);
-  const cleanTitle = deckTitle.trim();
-  
-  // Create a more informative first slide
-  const slides = [
-    { 
-      title: cleanTitle, 
-      content: `<div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h1 style="font-size: 48px; margin-bottom: 40px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">${cleanTitle}</h1>
-  <p style="font-size: 24px; margin-bottom: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'}; text-align: center;">An overview and introduction</p>
-  <ul style="font-size: 22px; list-style-type: none; max-width: 800px; margin: 0 auto; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> Key features and highlights
-    </li>
-    <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> Why ${cleanTitle} stands out
-    </li>
-    <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> What we'll cover in this presentation
-    </li>
-  </ul>
-</div>`
-    }
-  ];
-  
-  // Choose appropriate slide types based on the topic
-  const slideTemplates = getTopicSpecificTemplates(cleanTitle, topics);
-  
-  // Add content slides based on the number requested
-  const contentSlideCount = numSlides - 2; // Subtract title and conclusion
-  
-  for (let i = 0; i < contentSlideCount; i++) {
-    if (i < slideTemplates.length) {
-      slides.push(slideTemplates[i]);
-    } else if (i < topics.length) {
-      slides.push({ 
-        title: titleCase(topics[i]), 
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">${titleCase(topics[i])}</h2>
-  <p style="font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Key information about ${topics[i]}:</p>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Important feature or detail</li>
-    <li style="margin-bottom: 20px;">Relevant statistics or data</li>
-    <li style="margin-bottom: 20px;">Competitive advantages</li>
-    <li style="margin-bottom: 20px;">User benefits</li>
-  </ul>
-</div>`
-      });
-    } else {
-      slides.push({ 
-        title: `Key Aspect ${i + 1}`, 
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Important Information</h2>
-  <p style="font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Details about ${cleanTitle}:</p>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Feature point or specification</li>
-    <li style="margin-bottom: 20px;">User benefit or advantage</li>
-    <li style="margin-bottom: 20px;">Supporting data or information</li>
-  </ul>
-</div>`
-      });
-    }
+  // Handle case where no valid slides were extracted
+  if (!slides || !Array.isArray(slides) || slides.length === 0) {
+    throw new Error('No valid slides found in response');
   }
   
-  // Add a more detailed conclusion
-  slides.push({ 
-    title: "Summary & Conclusion", 
-    content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Summary</h2>
-  <p style="font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Key takeaways about ${cleanTitle}:</p>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Highlighted benefit or feature</li>
-    <li style="margin-bottom: 20px;">Important conclusion point</li>
-    <li style="margin-bottom: 20px;">Call to action or next steps</li>
-  </ul>
-  <p style="font-size: 24px; margin-top: 40px; text-align: center; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Thank you for your attention!</p>
-</div>`
-  });
-  
-  return slides;
-}
-
-// Convert text to Title Case
-function titleCase(text) {
-  return text.replace(/\w\S*/g, function(txt) {
-    return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-  });
-}
-
-// Get slide templates specific to the topic
-function getTopicSpecificTemplates(title, topics) {
-  const cleanTitle = title.toLowerCase();
-  
-  // Car or vehicle related templates
-  if (cleanTitle.includes('car') || 
-      cleanTitle.includes('vehicle') || 
-      cleanTitle.includes('tesla') || 
-      cleanTitle.includes('model') ||
-      cleanTitle.includes('auto')) {
-    return [
-      {
-        title: "Performance & Specifications",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Performance & Specifications</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Engine/Motor specifications and power output</li>
-    <li style="margin-bottom: 20px;">Acceleration and top speed</li>
-    <li style="margin-bottom: 20px;">Range and efficiency metrics</li>
-    <li style="margin-bottom: 20px;">Charging capabilities (if electric)</li>
-  </ul>
-</div>`
-      },
-      {
-        title: "Design & Features",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Design & Features</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Exterior design highlights</li>
-    <li style="margin-bottom: 20px;">Interior comfort and space</li>
-    <li style="margin-bottom: 20px;">Technology and infotainment</li>
-    <li style="margin-bottom: 20px;">Safety features and ratings</li>
-  </ul>
-</div>`
-      },
-      {
-        title: "Technology & Innovation",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Technology & Innovation</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Advanced driver assistance systems</li>
-    <li style="margin-bottom: 20px;">Connectivity features</li>
-    <li style="margin-bottom: 20px;">Software capabilities and updates</li>
-    <li style="margin-bottom: 20px;">Unique technological advantages</li>
-  </ul>
-</div>`
-      },
-      {
-        title: "Pricing & Availability",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Pricing & Availability</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Starting price and trim levels</li>
-    <li style="margin-bottom: 20px;">Available options and packages</li>
-    <li style="margin-bottom: 20px;">Release date and production information</li>
-    <li style="margin-bottom: 20px;">Market availability and competition</li>
-  </ul>
-</div>`
-      }
-    ];
+  // If we have too many slides, trim to the exact number requested
+  if (slides.length > numSlides) {
+    slides = slides.slice(0, numSlides);
   }
   
-  // Technology product templates
-  if (cleanTitle.includes('tech') || 
-      cleanTitle.includes('product') || 
-      cleanTitle.includes('device') || 
-      cleanTitle.includes('software')) {
-    return [
-      {
-        title: "Key Features",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Key Features</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Primary functionality and capabilities</li>
-    <li style="margin-bottom: 20px;">Unique selling points</li>
-    <li style="margin-bottom: 20px;">Technical specifications</li>
-    <li style="margin-bottom: 20px;">User experience highlights</li>
-  </ul>
-</div>`
-      },
-      {
-        title: "Use Cases & Applications",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Use Cases & Applications</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Primary user scenarios</li>
-    <li style="margin-bottom: 20px;">Industry applications</li>
-    <li style="margin-bottom: 20px;">Problem-solving capabilities</li>
-    <li style="margin-bottom: 20px;">Integration with existing systems</li>
-  </ul>
-</div>`
-      },
-      {
-        title: "Benefits & Advantages",
-        content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Benefits & Advantages</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Performance improvements</li>
-    <li style="margin-bottom: 20px;">Cost or time savings</li>
-    <li style="margin-bottom: 20px;">Competitive advantages</li>
-    <li style="margin-bottom: 20px;">User satisfaction metrics</li>
-  </ul>
-</div>`
-      }
-    ];
+  // If we don't have enough slides, duplicate the last slide
+  while (slides.length < numSlides) {
+    const lastSlide = {...slides[slides.length - 1]};
+    lastSlide.title = `More About ${prompt} (${slides.length + 1})`;
+    slides.push(lastSlide);
   }
-  
-  // Generic business templates
-  return [
-    {
-      title: "Overview & Background",
-      content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Overview & Background</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">History and development</li>
-    <li style="margin-bottom: 20px;">Key milestones and achievements</li>
-    <li style="margin-bottom: 20px;">Market position and relevance</li>
-    <li style="margin-bottom: 20px;">Core principles or values</li>
-  </ul>
-</div>`
-    },
-    {
-      title: "Key Features & Benefits",
-      content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Key Features & Benefits</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Primary features or components</li>
-    <li style="margin-bottom: 20px;">Main advantages and benefits</li>
-    <li style="margin-bottom: 20px;">Unique selling propositions</li>
-    <li style="margin-bottom: 20px;">Value to users or customers</li>
-  </ul>
-</div>`
-    },
-    {
-      title: "Applications & Use Cases",
-      content: `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Applications & Use Cases</h2>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Practical applications</li>
-    <li style="margin-bottom: 20px;">Real-world examples</li>
-    <li style="margin-bottom: 20px;">Success stories or case studies</li>
-    <li style="margin-bottom: 20px;">Industry or sector relevance</li>
-  </ul>
-</div>`
-    }
-  ];
-}
 
-// Helper function to extract potential topics from the prompt
-function extractTopicsFromPrompt(prompt) {
-  // Simple approach: look for keywords like "about", "including", "such as", "like"
-  const topicMatches = prompt.match(/(?:about|including|such as|like) ([\w\s,]+)/gi);
-  if (!topicMatches) return [];
-  
-  // Extract topics and split by commas if present
-  let topics = [];
-  topicMatches.forEach(match => {
-    const cleaned = match.replace(/(?:about|including|such as|like) /i, '');
-    const parts = cleaned.split(/,|\band\b/).map(t => t.trim());
-    topics = [...topics, ...parts];
-  });
-  
-  // If we failed to extract topics, try to split the prompt into phrases
-  if (topics.length === 0) {
-    topics = prompt.split(/[,.;]/).map(t => t.trim()).filter(t => t.length > 0 && t.split(' ').length <= 5);
-  }
-  
-  return topics.filter(t => t.length > 0);
-}
-
-// Ensure we have exactly the requested number of slides
-function ensureCorrectSlideCount(slidesData, numSlides, deckTitle, prompt) {
-  const cleanTitle = deckTitle.trim();
-  
-  // If we have too few slides, add more
-  if (slidesData.length < numSlides) {
-    const topics = extractTopicsFromPrompt(prompt);
-    const slideTemplates = getTopicSpecificTemplates(cleanTitle, topics);
-    let topicIndex = 0;
-    let templateIndex = 0;
+  // Process each slide to add transitions and images
+  const processedSlides = await Promise.all(slides.map(async (slide, index) => {
+    // Make a copy of the slide to work with
+    const processedSlide = {...slide};
     
-    while (slidesData.length < numSlides) {
-      // First try to use remaining templates
-      if (templateIndex < slideTemplates.length) {
-        const templateNotUsed = !slidesData.some(slide => 
-          slide.title === slideTemplates[templateIndex].title);
-          
-        if (templateNotUsed) {
-          slidesData.push(slideTemplates[templateIndex]);
-        }
-        templateIndex++;
-      }
-      // Then try to use topics
-      else if (topicIndex < topics.length) {
-        const topicTitle = titleCase(topics[topicIndex]);
-        slidesData.push({ 
-          title: topicTitle, 
-          content: `<div style="padding: 40px; height: 100%;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">${topicTitle}</h2>
-  <p style="font-size: 24px; margin-bottom: 25px;">Key information about ${topics[topicIndex]}:</p>
-  <ul style="font-size: 22px; margin-left: 30px;">
-    <li style="margin-bottom: 15px;">Important feature or detail</li>
-    <li style="margin-bottom: 15px;">Relevant statistics or data</li>
-    <li style="margin-bottom: 15px;">Competitive advantages</li>
-    <li style="margin-bottom: 15px;">User benefits</li>
-  </ul>
-</div>`
-        });
-        topicIndex++;
-      } 
-      // Finally, use generic slides
-      else {
-        const slideNumber = slidesData.length + 1;
-        slidesData.push({ 
-          title: `Additional Point ${slideNumber}`, 
-          content: `<div style="padding: 40px; height: 100%;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">Additional Information</h2>
-  <p style="font-size: 24px; margin-bottom: 25px;">More details about ${cleanTitle}:</p>
-  <ul style="font-size: 22px; margin-left: 30px;">
-    <li style="margin-bottom: 15px;">Additional specifications or features</li>
-    <li style="margin-bottom: 15px;">More benefits or advantages</li>
-    <li style="margin-bottom: 15px;">Related information or context</li>
-  </ul>
-</div>`
-        });
-      }
+    // Clean existing content of any broken image tags
+    if (processedSlide.content) {
+      // Remove any existing image tags (we'll add our own)
+      processedSlide.content = processedSlide.content.replace(/<img[^>]*>/g, '');
+      
+      // Remove placeholder references
+      processedSlide.content = processedSlide.content.replace(/placehold\.co/g, '');
+      processedSlide.content = processedSlide.content.replace(/\[TOPIC\]/g, '');
+      processedSlide.content = processedSlide.content.replace(/\[KEYWORDS\]/g, '');
     }
-  }
-  
-  // If we have too many slides, trim
-  if (slidesData.length > numSlides) {
-    // Keep the first slide (title) and last slide (conclusion)
-    // and select the most relevant middle slides
-    if (numSlides >= 3) {
-      const firstSlide = slidesData[0];
-      const lastSlide = slidesData[slidesData.length - 1];
-      const middleSlides = slidesData.slice(1, -1)
-                                     .slice(0, numSlides - 2);
-      slidesData = [firstSlide, ...middleSlides, lastSlide];
+    
+    // Add transition class if missing
+    if (!processedSlide.content.includes('transition-')) {
+      const transitionClass = getTransitionClass(transition);
+      processedSlide.content = processedSlide.content.replace('<div', `<div class="${transitionClass}"`);
+    }
+    
+    // Determine if this is a one-column or two-column layout
+    let isOneColumnLayout = true;
+    if (processedSlide.content.includes('display: flex') && 
+        processedSlide.content.includes('justify-content: space-between')) {
+      isOneColumnLayout = false;
+    }
+    
+    // Get image URL using Unsplash API
+    const imageUrl = await fetchImageForSlide(processedSlide.content, processedSlide.title, prompt);
+    
+    // For one-column layout, add the image at the end
+    if (isOneColumnLayout) {
+      // Find the closing div and add an image before it
+      const closingTagIndex = processedSlide.content.lastIndexOf('</div>');
+      if (closingTagIndex !== -1) {
+        processedSlide.content = 
+          processedSlide.content.substring(0, closingTagIndex) +
+          `<div style="display: flex; justify-content: center; margin-top: 30px;">
+            <img src="${imageUrl}" 
+                 alt="${processedSlide.title}" 
+                 style="max-width: 90%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+          </div>` +
+          processedSlide.content.substring(closingTagIndex);
+      }
     } else {
-      slidesData = slidesData.slice(0, numSlides);
+      // For two-column layout, look for the image container div and add the image there
+      const imgContainerRegex = /<div[^>]*flex:\s*1[^>]*>(?![\s\S]*?<img)/i;
+      const match = processedSlide.content.match(imgContainerRegex);
+      
+      if (match && match.index) {
+        const insertPoint = match.index + match[0].length;
+        processedSlide.content = 
+          processedSlide.content.substring(0, insertPoint) +
+          `<img src="${imageUrl}" 
+               alt="${processedSlide.title}" 
+               style="max-width: 100%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">` +
+          processedSlide.content.substring(insertPoint);
+      } else {
+        // If we couldn't find a place to insert, add it at the end before the last div
+        const closingTagIndex = processedSlide.content.lastIndexOf('</div>');
+        if (closingTagIndex !== -1) {
+          processedSlide.content = 
+            processedSlide.content.substring(0, closingTagIndex) +
+            `<div style="display: flex; justify-content: center; margin-top: 30px;">
+              <img src="${imageUrl}" 
+                   alt="${processedSlide.title}" 
+                   style="max-width: 90%; max-height: 300px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);">
+            </div>` +
+            processedSlide.content.substring(closingTagIndex);
+        }
+      }
     }
+    
+    return processedSlide;
+  }));
+  
+  return processedSlides;
+}
+
+// Helper function to get the transition class
+function getTransitionClass(transition) {
+  switch (transition) {
+    case 'fade':
+      return 'transition-opacity duration-500 ease-in-out';
+    case 'slide':
+      return 'transition-transform duration-500 ease-in-out';
+    case 'zoom':
+      return 'transition-transform duration-500 ease-in-out transform hover:scale-105';
+    case 'flip':
+      return 'transition-transform duration-500 perspective-1000 hover:rotate-y-180';
+    case 'cube':
+      return 'transition-transform duration-700 transform-style-3d rotate-y-0 hover:rotate-y-90';
+    default:
+      return 'transition-opacity duration-500 ease-in-out';
+  }
+}
+
+// Fetch image for a slide using Unsplash API with improved reliability
+async function fetchImageForSlide(slideContent, slideTitle, promptTopic) {
+  try {
+    // Extract keywords for the search query
+    const keywords = extractKeywords(slideContent, slideTitle, promptTopic);
+    const category = determineCategory(promptTopic, keywords);
+    
+    // Create search query by combining keywords
+    const searchQuery = keywords.join(' ');
+    
+    console.log(`Fetching image for slide "${slideTitle}" with query: "${searchQuery}"`);
+    
+    // Check if API key is available
+    if (!UNSPLASH_ACCESS_KEY) {
+      console.log('Unsplash API key not found, using fallback from category:', category);
+      return FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+    }
+    
+    // Call the Unsplash API with authentication
+    const response = await fetch(
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchQuery)}&per_page=3`,
+      {
+        headers: {
+          'Authorization': `Client-ID ${UNSPLASH_ACCESS_KEY}`
+        }
+      }
+    );
+    
+    if (!response.ok) {
+      console.log(`Unsplash API error: ${response.status} - ${response.statusText}`);
+      return FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+    }
+    
+    const data = await response.json();
+    
+    // If we got results, use one of the images
+    if (data.results && data.results.length > 0) {
+      // Choose a random image from the results to add variety
+      const randomIndex = Math.floor(Math.random() * Math.min(data.results.length, 3));
+      return data.results[randomIndex].urls.regular;
+    }
+    
+    // If no results, try a more general query with just the topic
+    if (promptTopic) {
+      console.log(`No results found, trying more general search with topic: "${promptTopic}"`);
+      
+      const backupResponse = await fetch(
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(promptTopic)}&per_page=1`,
+        {
+          headers: {
+            'Authorization': `Client-ID ${UNSPLASH_ACCESS_KEY}`
+          }
+        }
+      );
+      
+      if (backupResponse.ok) {
+        const backupData = await backupResponse.json();
+        if (backupData.results && backupData.results.length > 0) {
+          return backupData.results[0].urls.regular;
+        }
+      }
+    }
+    
+    // Fallback to category-based image
+    console.log(`Using fallback image for category: ${category}`);
+    return FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+  } catch (error) {
+    console.error('Error fetching image:', error);
+    // Determine a fallback category and use a guaranteed working image
+    const keywords = extractKeywords('', slideTitle, promptTopic);
+    const category = determineCategory(promptTopic, keywords);
+    return FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+  }
+}
+
+// Extract meaningful keywords from slide content and title
+function extractKeywords(slideContent, slideTitle, promptTopic) {
+  // Start with the prompt topic as the base
+  let keywords = promptTopic ? [promptTopic] : [];
+  
+  // Add the slide title as it's usually most relevant
+  if (slideTitle) {
+    // Clean and extract words from title
+    const titleWords = slideTitle
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(word => word.length > 3)
+      .filter(word => !['this', 'that', 'from', 'about', 'with', 'have', 'there', 'their', 'what', 'when', 'where', 'which', 'while', 'would', 'could', 'should'].includes(word));
+      
+    // Add unique words from title
+    titleWords.forEach(word => {
+      if (!keywords.includes(word)) {
+        keywords.push(word);
+      }
+    });
   }
   
-  // Ensure the first slide is a title slide with proper formatting
-  if (slidesData.length > 0) {
-    slidesData[0].title = cleanTitle;
-    slidesData[0].content = `<div style="display: flex; flex-direction: column; justify-content: center; align-items: center; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h1 style="font-size: 48px; margin-bottom: 40px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">${cleanTitle}</h1>
-  <p style="font-size: 24px; margin-bottom: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'}; text-align: center;">An overview and introduction</p>
-  <ul style="font-size: 22px; list-style-type: none; max-width: 800px; margin: 0 auto; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> Key features and highlights
-    </li>
-    <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> Why ${cleanTitle} stands out
-    </li>
-    <li style="margin-bottom: 20px; padding-left: 30px; position: relative;">
-      <span style="position: absolute; left: 0; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'};">➤</span> What we'll cover in this presentation
-    </li>
-  </ul>
-</div>`;
+  // Extract content text (removing HTML tags)
+  if (slideContent) {
+    const contentText = slideContent
+      .replace(/<[^>]*>/g, ' ')
+      .toLowerCase()
+      .replace(/[^\w\s]/g, '')
+      .split(/\s+/)
+      .filter(word => word.length > 4)
+      .filter(word => !['this', 'that', 'from', 'about', 'with', 'have', 'there', 'their', 'what', 'when', 'where', 'which', 'while', 'would', 'could', 'should'].includes(word));
+    
+    // Add top 3 longest words from content (they're often most specific)
+    contentText
+      .sort((a, b) => b.length - a.length)
+      .slice(0, 3)
+      .forEach(word => {
+        if (!keywords.includes(word)) {
+          keywords.push(word);
+        }
+      });
   }
   
-  // Ensure the last slide is a conclusion with proper formatting
-  if (slidesData.length > 1) {
-    slidesData[slidesData.length - 1].title = "Summary & Conclusion";
-    slidesData[slidesData.length - 1].content = `<div style="display: flex; flex-direction: column; justify-content: flex-start; width: 100%; height: 100%; padding: 60px; background-color: ${theme === 'dark' ? '#1e293b' : '#f8fafc'}; font-family: Arial, sans-serif;">
-  <h2 style="font-size: 36px; margin-bottom: 30px; color: ${theme === 'dark' ? '#60a5fa' : '#1e40af'}; text-align: center;">Summary</h2>
-  <p style="font-size: 24px; margin-bottom: 25px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Key takeaways about ${cleanTitle}:</p>
-  <ul style="font-size: 22px; margin-left: 40px; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">
-    <li style="margin-bottom: 20px;">Highlighted benefit or feature</li>
-    <li style="margin-bottom: 20px;">Important conclusion point</li>
-    <li style="margin-bottom: 20px;">Call to action or next steps</li>
-  </ul>
-  <p style="font-size: 24px; margin-top: 40px; text-align: center; color: ${theme === 'dark' ? '#e2e8f0' : '#334155'};">Thank you for your attention!</p>
-</div>`;
+  // Limit to 5 keywords max and ensure we have at least one
+  keywords = keywords.slice(0, 5);
+  if (keywords.length === 0) {
+    keywords.push('presentation');
   }
   
-  return slidesData;
+  return keywords;
+}
+
+// Determine content category for fallback images
+function determineCategory(promptTopic, keywords) {
+  const combinedText = [promptTopic, ...keywords].join(' ').toLowerCase();
+  
+  // Check for category matches
+  if (/business|company|corporate|finance|economy|market|stock|office|professional|work/i.test(combinedText)) {
+    return 'business';
+  }
+  if (/tech|technology|computer|digital|software|hardware|program|code|internet|web|app|ai|robot/i.test(combinedText)) {
+    return 'technology';
+  }
+  if (/nature|environment|eco|green|plant|animal|wildlife|forest|mountain|ocean|sea|beach|sky|landscape/i.test(combinedText)) {
+    return 'nature';
+  }
+  if (/food|eat|cuisine|dish|meal|restaurant|cook|chef|kitchen|recipe|ingredient|fruit|vegetable/i.test(combinedText)) {
+    return 'food';
+  }
+  if (/travel|tourism|vacation|holiday|trip|journey|adventure|destination|tour|city|country|world|explore/i.test(combinedText)) {
+    return 'travel';
+  }
+  if (/sport|game|athlete|team|play|competition|tournament|championship|football|soccer|basketball|tennis|golf/i.test(combinedText)) {
+    return 'sports';
+  }
+  if (/education|learn|school|university|college|student|teacher|professor|academic|study|research|knowledge/i.test(combinedText)) {
+    return 'education';
+  }
+  if (/health|medical|doctor|hospital|wellness|fitness|exercise|yoga|meditation|mind|body|nutrition|diet/i.test(combinedText)) {
+    return 'health';
+  }
+  if (/science|scientific|physics|chemistry|biology|experiment|lab|theory|hypothesis|quantum|molecule|atom/i.test(combinedText)) {
+    return 'science';
+  }
+  if (/art|artistic|paint|drawing|sculpture|creative|museum|gallery|exhibition|design|visual|aesthetic/i.test(combinedText)) {
+    return 'art';
+  }
+  if (/music|song|band|concert|instrument|guitar|piano|drum|rhythm|melody|symphony|orchestra/i.test(combinedText)) {
+    return 'music';
+  }
+  if (/finance|money|banking|investment|fund|budget|saving|loan|credit|debt|trading|stock/i.test(combinedText)) {
+    return 'finance';
+  }
+  if (/history|historical|ancient|century|civilization|empire|king|queen|war|period|era|past/i.test(combinedText)) {
+    return 'history';
+  }
+  if (/fashion|style|clothing|dress|wear|trend|designer|model|outfit|accessory|textile|collection/i.test(combinedText)) {
+    return 'fashion';
+  }
+  if (/architecture|building|structure|design|construction|architect|skyscraper|house|bridge|tower/i.test(combinedText)) {
+    return 'architecture';
+  }
+  if (/car|automobile|vehicle|driving|race|engine|wheel|speed|motor|automotive|truck|sedan/i.test(combinedText)) {
+    return 'cars';
+  }
+  if (/space|universe|galaxy|planet|star|astronomy|cosmos|solar|lunar|moon|mars|astronaut|nasa/i.test(combinedText)) {
+    return 'space';
+  }
+  if (/animal|wildlife|species|pet|dog|cat|bird|fish|mammal|reptile|zoo|ecosystem/i.test(combinedText)) {
+    return 'animals';
+  }
+  if (/game|gaming|player|console|video|playstation|xbox|nintendo|esport|minecraft|fortnite/i.test(combinedText)) {
+    return 'gaming';
+  }
+  if (/politics|government|policy|election|president|democracy|party|vote|senator|law|congress/i.test(combinedText)) {
+    return 'politics';
+  }
+  if (/religion|faith|spiritual|church|temple|mosque|prayer|god|belief|worship|religious|sacred/i.test(combinedText)) {
+    return 'religion';
+  }
+  if (/entertainment|movie|film|cinema|theater|show|celebrity|actor|actress|hollywood|tv|television/i.test(combinedText)) {
+    return 'entertainment';
+  }
+  if (/military|army|navy|air force|soldier|war|weapon|defense|strategy|combat|security|tactical/i.test(combinedText)) {
+    return 'military';
+  }
+  if (/innovation|innovative|idea|invention|creative|solution|progress|startup|entrepreneur|future/i.test(combinedText)) {
+    return 'innovation';
+  }
+  if (/motivation|inspire|success|goal|achieve|dream|mindset|positive|courage|determination/i.test(combinedText)) {
+    return 'motivation';
+  }
+  if (/leadership|leader|manage|team|organization|vision|influence|guide|direct|executive|ceo/i.test(combinedText)) {
+    return 'leadership';
+  }
+  if (/climate|weather|change|global warming|environment|sustainable|carbon|emission|temperature/i.test(combinedText)) {
+    return 'climate';
+  }
+  if (/development|progress|grow|improve|evolve|advance|expansion|growth|upgrade|enhancement/i.test(combinedText)) {
+    return 'development';
+  }
+  if (/communication|speak|talk|message|conversation|present|discuss|speech|dialogue|interact/i.test(combinedText)) {
+    return 'communication';
+  }
+  
+  return 'default';
 }
 
 module.exports = router; 

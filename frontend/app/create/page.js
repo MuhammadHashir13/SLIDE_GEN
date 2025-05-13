@@ -10,7 +10,8 @@ export default function CreatePresentation() {
     title: '',
     prompt: '',
     theme: 'light',
-    numSlides: 5
+    numSlides: 5,
+    transition: 'fade'
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,7 +37,7 @@ export default function CreatePresentation() {
         }),
       });
       
-      // Then, generate slides with Hugging Face API
+      // Then, generate slides with OpenAI API
       if (formData.prompt) {
         setGeneratingSlides(true);
         try {
@@ -46,7 +47,8 @@ export default function CreatePresentation() {
               deckId: deckData._id,
               prompt: formData.prompt,
               numSlides: formData.numSlides,
-              theme: formData.theme
+              theme: formData.theme,
+              transition: formData.transition
             }),
           });
           
@@ -78,7 +80,7 @@ export default function CreatePresentation() {
             Create AI-Generated Presentation
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
-            Enter a prompt, and our AI will generate slides for you
+            Enter a prompt, and our AI will generate slides with images and transitions
           </p>
         </div>
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
@@ -146,13 +148,33 @@ export default function CreatePresentation() {
                   onChange={(e) =>
                     setFormData({ ...formData, numSlides: parseInt(e.target.value, 10) })
                   }
-                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                  className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                 >
                   {[3, 5, 7, 10, 15].map(num => (
                     <option key={num} value={num}>{num} Slides</option>
                   ))}
                 </select>
               </div>
+            </div>
+            <div>
+              <label htmlFor="transition" className="sr-only">
+                Slide Transition
+              </label>
+              <select
+                id="transition"
+                name="transition"
+                value={formData.transition}
+                onChange={(e) =>
+                  setFormData({ ...formData, transition: e.target.value })
+                }
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+              >
+                <option value="fade">Fade Transition</option>
+                <option value="slide">Slide Transition</option>
+                <option value="zoom">Zoom Transition</option>
+                <option value="flip">Flip Transition</option>
+                <option value="cube">Cube Transition</option>
+              </select>
             </div>
           </div>
 

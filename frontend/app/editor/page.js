@@ -457,10 +457,10 @@ export default function Editor() {
             {deck.title}
           </h2>
           <div className="space-y-2 mb-6">
-            {slides.map((slide, index) => (
-              <button
-                key={index}
-                onClick={() => handleSlideChange(index)}
+          {slides.map((slide, index) => (
+            <button
+              key={index}
+              onClick={() => handleSlideChange(index)}
                 className={`w-full p-3 text-left rounded-md flex items-center transition-all ${
                   currentSlide === index 
                     ? 'bg-blue-600 text-white shadow-md transform translate-x-1' 
@@ -471,30 +471,30 @@ export default function Editor() {
                   {index + 1}
                 </span>
                 <span className="truncate">Slide {index + 1}</span>
-              </button>
-            ))}
-          </div>
+            </button>
+          ))}
+        </div>
           <div className="space-y-3 pt-4 border-t border-gray-700">
-            <button
-              onClick={handleSave}
+        <button
+          onClick={handleSave}
               className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm"
-            >
+        >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" />
               </svg>
-              Save Changes
-            </button>
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating}
+          Save Changes
+        </button>
+        <button
+          onClick={handleGenerate}
+          disabled={isGenerating}
               className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 disabled:bg-gray-600 transition flex items-center justify-center gap-2 shadow-sm"
-            >
+        >
               <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
                 <path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z" />
               </svg>
-              {isGenerating ? 'Generating...' : 'Generate with AI'}
-            </button>
-            <button
+          {isGenerating ? 'Generating...' : 'Generate with AI'}
+        </button>
+        <button
               onClick={handleExportPDF}
               disabled={isExporting}
               className="w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700 transition disabled:bg-gray-500 flex items-center justify-center gap-2 shadow-sm"
@@ -593,15 +593,19 @@ export default function Editor() {
                       }}
                     >
                       <div
-                        className={`slide-container ${themeClass}`}
+                        className={`slide-container ${slides[index]?.transition === 'fade' ? 'transition-opacity duration-500 ease-in-out' : 
+                           slides[index]?.transition === 'slide' ? 'transition-transform duration-500 ease-in-out' : 
+                           slides[index]?.transition === 'zoom' ? 'transition-transform duration-500 ease-in-out transform hover:scale-105' : 
+                           slides[index]?.transition === 'flip' ? 'transition-transform duration-500 perspective-1000 hover:rotate-y-180' : 
+                           slides[index]?.transition === 'cube' ? 'transition-transform duration-700 transform-style-3d rotate-y-0 hover:rotate-y-90' : 
+                           'transition-opacity duration-500 ease-in-out'}`}
                         style={{
                           position: 'absolute',
                           top: 0,
                           left: 0,
                           right: 0,
                           bottom: 0,
-                          backgroundColor: bgColor,
-                          color: textColor
+                          backgroundColor: slides[index]?.theme === 'dark' ? '#1e293b' : '#f8fafc'
                         }}
                       >
                         <div 
@@ -611,8 +615,8 @@ export default function Editor() {
                             width: '100%',
                             height: '100%',
                             overflow: 'hidden',
-                            backgroundColor: bgColor,
-                            color: textColor
+                            backgroundColor: slides[index]?.theme === 'dark' ? '#1e293b' : '#f8fafc',
+                            color: slides[index]?.theme === 'dark' ? '#e2e8f0' : '#334155'
                           }}
                         />
                       </div>
@@ -634,7 +638,12 @@ export default function Editor() {
                 }}
               >
                 <div
-                  className="slide-container"
+                  className={`slide-container ${slides[currentSlide]?.transition === 'fade' ? 'transition-opacity duration-500 ease-in-out' : 
+                     slides[currentSlide]?.transition === 'slide' ? 'transition-transform duration-500 ease-in-out' : 
+                     slides[currentSlide]?.transition === 'zoom' ? 'transition-transform duration-500 ease-in-out transform hover:scale-105' : 
+                     slides[currentSlide]?.transition === 'flip' ? 'transition-transform duration-500 perspective-1000 hover:rotate-y-180' : 
+                     slides[currentSlide]?.transition === 'cube' ? 'transition-transform duration-700 transform-style-3d rotate-y-0 hover:rotate-y-90' : 
+                     'transition-opacity duration-500 ease-in-out'}`}
                   style={{
                     position: 'relative',
                     width: '100%',
@@ -776,9 +785,9 @@ export default function Editor() {
                   title="Insert Image"
                 >
                   🖼️ Image
-                </button>
-              </div>
-              
+        </button>
+      </div>
+
               <div className="flex gap-2 w-full justify-center">
                 <div className="flex gap-1">
                   <button 

@@ -16,10 +16,10 @@ export default function Navigation() {
     const checkAuth = async () => {
       const token = getToken();
       if (!token) {
-        setUser(null);
+      setUser(null);
         setLoading(false);
-        return;
-      }
+      return;
+    }
       
       try {
         const userData = await apiFetch('/api/auth/me');
