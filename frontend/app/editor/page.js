@@ -443,80 +443,101 @@ export default function Editor() {
   if (!deck) return <div>Deck not found</div>;
 
   return (
-    <div className="flex h-screen bg-gray-800">
+    <div className="flex h-screen pt-16 bg-gray-800">
       {/* Hide sidebar when printing */}
       {!isPrinting && (
-        <div className="w-64 bg-gray-900 p-4 overflow-y-auto text-white">
-          <h2 className="text-xl font-bold mb-4 text-blue-400">{deck.title}</h2>
-        <div className="space-y-2">
-          {slides.map((slide, index) => (
+        <div className="w-64 bg-gray-900 p-4 overflow-y-auto text-white shadow-xl">
+          <h2 className="text-xl font-bold mb-6 text-blue-400 flex items-center">
+            <span className="mr-2">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M9 2a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V6.414A2 2 0 0016.414 5L14 2.586A2 2 0 0012.586 2H9z" />
+                <path d="M3 8a2 2 0 012-2h2a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+              </svg>
+            </span>
+            {deck.title}
+          </h2>
+          <div className="space-y-2 mb-6">
+            {slides.map((slide, index) => (
+              <button
+                key={index}
+                onClick={() => handleSlideChange(index)}
+                className={`w-full p-3 text-left rounded-md flex items-center transition-all ${
+                  currentSlide === index 
+                    ? 'bg-blue-600 text-white shadow-md transform translate-x-1' 
+                    : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
+                }`}
+              >
+                <span className="mr-2 text-xs font-semibold bg-opacity-80 rounded-full w-5 h-5 flex items-center justify-center">
+                  {index + 1}
+                </span>
+                <span className="truncate">Slide {index + 1}</span>
+              </button>
+            ))}
+          </div>
+          <div className="space-y-3 pt-4 border-t border-gray-700">
             <button
-              key={index}
-              onClick={() => handleSlideChange(index)}
-              className={`w-full p-2 text-left rounded ${
-                  currentSlide === index ? 'bg-blue-600 text-white' : 'bg-gray-800 text-gray-200 hover:bg-gray-700'
-              }`}
+              onClick={handleSave}
+              className="w-full bg-blue-600 text-white py-2 rounded-md hover:bg-blue-700 transition flex items-center justify-center gap-2 shadow-sm"
             >
-              Slide {index + 1}
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M7.707 10.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V6h5a2 2 0 012 2v7a2 2 0 01-2 2H4a2 2 0 01-2-2V8a2 2 0 012-2h5v5.586l-1.293-1.293zM9 4a1 1 0 012 0v2H9V4z" />
+              </svg>
+              Save Changes
             </button>
-          ))}
-        </div>
-          <div className="mt-6 space-y-2">
-        <button
-          onClick={handleSave}
-              className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-        >
-          Save Changes
-        </button>
-        <button
-          onClick={handleGenerate}
-          disabled={isGenerating}
-              className="w-full bg-green-600 text-white py-2 rounded hover:bg-green-700 disabled:bg-gray-600 transition"
-        >
-          {isGenerating ? 'Generating...' : 'Generate with AI'}
-        </button>
-        <button
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating}
+              className="w-full bg-green-600 text-white py-2 rounded-md hover:bg-green-700 disabled:bg-gray-600 transition flex items-center justify-center gap-2 shadow-sm"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path d="M11 17a1 1 0 001.447.894l4-2A1 1 0 0017 15V9.236a1 1 0 00-1.447-.894l-4 2a1 1 0 00-.553.894V17zM15.211 6.276a1 1 0 000-1.788l-4.764-2.382a1 1 0 00-.894 0L4.789 4.488a1 1 0 000 1.788l4.764 2.382a1 1 0 00.894 0l4.764-2.382zM4.447 8.342A1 1 0 003 9.236V15a1 1 0 00.553.894l4 2A1 1 0 009 17v-5.764a1 1 0 00-.553-.894l-4-2z" />
+              </svg>
+              {isGenerating ? 'Generating...' : 'Generate with AI'}
+            </button>
+            <button
               onClick={handleExportPDF}
               disabled={isExporting}
-              className="w-full bg-teal-600 text-white py-2 rounded hover:bg-teal-700 transition disabled:bg-gray-500"
+              className="w-full bg-indigo-600 text-white py-2 rounded-md hover:bg-indigo-700 transition disabled:bg-gray-500 flex items-center justify-center gap-2 shadow-sm"
             >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V7.414A2 2 0 0015.414 6L12 2.586A2 2 0 0010.586 2H6zm5 6a1 1 0 10-2 0v3.586l-1.293-1.293a1 1 0 10-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 11.586V8z" clipRule="evenodd" />
+              </svg>
               {isExporting ? 'Exporting...' : 'Export PDF'}
-            </button>
-            <button
-              onClick={handlePrintPDF}
-              disabled={isPrinting}
-              className="w-full bg-purple-600 text-white py-2 rounded hover:bg-purple-700 transition disabled:bg-gray-500"
-            >
-              Print to PDF
             </button>
           </div>
         </div>
       )}
 
       {/* Editor/Preview Area */}
-      <div className={`${isPrinting ? 'w-full' : 'flex-1'} p-8 overflow-y-auto bg-gray-700 flex items-center justify-center`}>
+      <div className={`${isPrinting ? 'w-full' : 'flex-1'} p-8 overflow-y-auto bg-gradient-to-b from-gray-800 to-gray-900 flex items-center justify-center`}>
         <div ref={slidesContainerRef} className="presentation-frame" style={{ width: '90%', maxWidth: '1200px' }}>
           {/* Slide Navigation Controls - Hide when printing */}
           {!isPrinting && (
-            <div className="flex justify-between mb-4">
+            <div className="flex justify-between items-center mb-6">
               <button 
                 onClick={() => currentSlide > 0 && handleSlideChange(currentSlide - 1)}
                 disabled={currentSlide === 0}
-                className="bg-gray-800 text-white p-2 rounded-full disabled:opacity-50"
+                className="bg-gray-800 text-white p-2 rounded-full disabled:opacity-50 hover:bg-gray-700 transition-colors shadow-md flex items-center"
                 aria-label="Previous slide"
               >
-                ← Prev
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+                <span className="ml-1">Prev</span>
               </button>
-              <div className="text-white">
+              <div className="text-white bg-gray-800 bg-opacity-80 px-4 py-2 rounded-full text-sm font-medium backdrop-blur-sm shadow-md">
                 Slide {currentSlide + 1} of {slides.length}
               </div>
               <button 
                 onClick={() => currentSlide < slides.length - 1 && handleSlideChange(currentSlide + 1)}
                 disabled={currentSlide === slides.length - 1}
-                className="bg-gray-800 text-white p-2 rounded-full disabled:opacity-50"
+                className="bg-gray-800 text-white p-2 rounded-full disabled:opacity-50 hover:bg-gray-700 transition-colors shadow-md flex items-center"
                 aria-label="Next slide"
               >
-                Next →
+                <span className="mr-1">Next</span>
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
+                </svg>
               </button>
             </div>
           )}
@@ -663,9 +684,9 @@ export default function Editor() {
             </div>
           )}
 
-          {/* Basic formatting toolbar - Hide when printing */}
+          {/* Formatting toolbar - hide when printing */}
           {!isPrinting && (
-            <div className="mt-4 bg-gray-800 rounded p-2 flex flex-wrap gap-2 justify-center format-buttons relative">
+            <div className="mt-6 bg-gray-800 bg-opacity-90 backdrop-blur-sm rounded-xl p-4 flex flex-wrap gap-3 justify-center format-buttons shadow-lg border border-gray-700">
               <div className="flex gap-2 mb-2 w-full justify-center">
                 <button 
                   className="text-white bg-gray-700 px-3 py-1 rounded hover:bg-gray-600"
@@ -780,8 +801,8 @@ export default function Editor() {
                     title="Right Align"
                   >
                     ➡️
-        </button>
-      </div>
+                  </button>
+                </div>
 
                 <div className="flex gap-1">
                   <input 

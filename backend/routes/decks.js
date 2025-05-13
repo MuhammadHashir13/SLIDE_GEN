@@ -101,9 +101,10 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(404).json({ message: 'Deck not found' });
     }
 
-    await deck.remove();
+    await Deck.deleteOne({ _id: req.params.id });
     res.json({ message: 'Deck deleted successfully' });
   } catch (error) {
+    console.error('Error deleting deck:', error);
     res.status(500).json({ message: 'Error deleting deck', error: error.message });
   }
 });

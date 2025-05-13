@@ -1,18 +1,48 @@
 @import "tailwindcss";
 
 :root {
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-poppins);
   --background: #ffffff;
   --foreground: #171717;
   --slide-heading-color: #1e40af;
   --slide-text-color: #334155;
   --slide-bg-color: #f8fafc;
+  
+  /* Modern UI colors */
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-light: #dbeafe;
+  --secondary: #6366f1;
+  --secondary-hover: #4f46e5;
+  --accent: #8b5cf6;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+  
+  /* Light mode shadows */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-inter);
+  --font-heading: var(--font-poppins);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -22,15 +52,94 @@
   }
 }
 
+/* Global styling */
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading), system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Modern button styling */
+button, 
+.btn {
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+button:focus, 
+.btn:focus {
+  outline: 2px solid var(--primary-light);
+  outline-offset: 2px;
+}
+
+button:active, 
+.btn:active {
+  transform: translateY(1px);
+}
+
+/* Input and form styling */
+input, 
+select, 
+textarea {
+  transition: all 0.2s ease;
+  border-radius: 0.375rem;
+}
+
+input:focus, 
+select:focus, 
+textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--primary-light);
+}
+
+/* Card styling */
+.card {
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-md);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+.animate-slide-up {
+  animation: slideUp 0.5s ease-out forwards;
 }
 
 /* Slide content styling */
 .slide-content {
-  font-family: Arial, sans-serif;
+  font-family: var(--font-sans), Arial, sans-serif;
   padding: 60px;
   background-color: var(--slide-bg-color);
   color: var(--slide-text-color);
@@ -50,6 +159,7 @@ body {
 
 /* Heading styles */
 .slide-content h1 {
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 48px;
   margin-bottom: 40px;
   color: var(--slide-heading-color);
@@ -58,6 +168,7 @@ body {
 }
 
 .slide-content h2 {
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 36px;
   margin-bottom: 30px;
   color: var(--slide-heading-color);
@@ -66,6 +177,7 @@ body {
 }
 
 .slide-content h3 {
+  font-family: var(--font-heading), Arial, sans-serif;
   font-size: 30px;
   margin-bottom: 25px;
   color: var(--slide-heading-color);
@@ -243,4 +355,38 @@ body {
   .slide-content li {
     color: #334155 !important;
   }
+}
+
+/* Add these keyframes and animations */
+@keyframes blob {
+  0% {
+    transform: translate(0px, 0px) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
+  100% {
+    transform: translate(0px, 0px) scale(1);
+  }
+}
+
+.animate-blob {
+  animation: blob 7s infinite;
+}
+
+.animation-delay-2000 {
+  animation-delay: 2s;
+}
+
+.animation-delay-4000 {
+  animation-delay: 4s;
+}
+
+/* For gradient text */
+.bg-clip-text {
+  -webkit-background-clip: text;
+  background-clip: text;
 }
