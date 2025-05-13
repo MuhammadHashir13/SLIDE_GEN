@@ -331,6 +331,9 @@ async function processSlides(parsedResponse, numSlides, theme, transition, promp
     slides.push(lastSlide);
   }
 
+  // Track used image URLs to avoid repetition
+  const usedImageUrls = [];
+
   // Process each slide to add transitions and images
   const processedSlides = await Promise.all(slides.map(async (slide, index) => {
     // Make a copy of the slide to work with
@@ -360,8 +363,18 @@ async function processSlides(parsedResponse, numSlides, theme, transition, promp
       isOneColumnLayout = false;
     }
     
-    // Get image URL using Unsplash API
-    const imageUrl = await fetchImageForSlide(processedSlide.content, processedSlide.title, prompt);
+    // Get image URL using Unsplash API, passing the list of already used URLs
+    const imageUrl = await fetchImageForSlide(
+      processedSlide.content, 
+      processedSlide.title, 
+      prompt,
+      usedImageUrls
+    );
+    
+    // Add this URL to our tracking list to avoid reuse
+    if (imageUrl) {
+      usedImageUrls.push(imageUrl);
+    }
     
     // For one-column layout, add the image at the end
     if (isOneColumnLayout) {
@@ -431,7 +444,7 @@ function getTransitionClass(transition) {
 }
 
 // Fetch image for a slide using Unsplash API with improved reliability
-async function fetchImageForSlide(slideContent, slideTitle, promptTopic) {
+async function fetchImageForSlide(slideContent, slideTitle, promptTopic, usedUrls = []) {
   try {
     // Extract keywords for the search query
     const keywords = extractKeywords(slideContent, slideTitle, promptTopic);
@@ -445,12 +458,12 @@ async function fetchImageForSlide(slideContent, slideTitle, promptTopic) {
     // Check if API key is available
     if (!UNSPLASH_ACCESS_KEY) {
       console.log('Unsplash API key not found, using fallback from category:', category);
-      return FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+      return getRandomUnusedImage(category, usedUrls);
     }
     
-    // Call the Unsplash API with authentication
+    // Call the Unsplash API with authentication - increased results per page for variety
     const response = await fetch(
-      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchQuery)}&per_page=3`,
+      `https://api.unsplash.com/search/photos?query=${encodeURIComponent(searchQuery)}&per_page=10`,
       {
         headers: {
           'Authorization': `Client-ID ${UNSPLASH_ACCESS_KEY}`
@@ -460,24 +473,33 @@ async function fetchImageForSlide(slideContent, slideTitle, promptTopic) {
     
     if (!response.ok) {
       console.log(`Unsplash API error: ${response.status} - ${response.statusText}`);
-      return FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+      return getRandomUnusedImage(category, usedUrls);
     }
     
     const data = await response.json();
     
-    // If we got results, use one of the images
+    // If we got results, use one of the images that hasn't been used before
     if (data.results && data.results.length > 0) {
-      // Choose a random image from the results to add variety
-      const randomIndex = Math.floor(Math.random() * Math.min(data.results.length, 3));
-      return data.results[randomIndex].urls.regular;
+      // Filter out any previously used URLs
+      const unusedResults = data.results.filter(result => !usedUrls.includes(result.urls.regular));
+      
+      if (unusedResults.length > 0) {
+        // Choose a random image from the unused results
+        const randomIndex = Math.floor(Math.random() * unusedResults.length);
+        return unusedResults[randomIndex].urls.regular;
+      } else if (data.results.length > 0) {
+        // If all images have been used before, pick a random one anyway
+        const randomIndex = Math.floor(Math.random() * data.results.length);
+        return data.results[randomIndex].urls.regular;
+      }
     }
     
-    // If no results, try a more general query with just the topic
+    // If no results or all have been used, try a more general query with just the topic
     if (promptTopic) {
-      console.log(`No results found, trying more general search with topic: "${promptTopic}"`);
+      console.log(`No unused results found, trying more general search with topic: "${promptTopic}"`);
       
       const backupResponse = await fetch(
-        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(promptTopic)}&per_page=1`,
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(promptTopic)}&per_page=10`,
         {
           headers: {
             'Authorization': `Client-ID ${UNSPLASH_ACCESS_KEY}`
@@ -488,21 +510,164 @@ async function fetchImageForSlide(slideContent, slideTitle, promptTopic) {
       if (backupResponse.ok) {
         const backupData = await backupResponse.json();
         if (backupData.results && backupData.results.length > 0) {
-          return backupData.results[0].urls.regular;
+          // Filter out previously used URLs
+          const unusedBackupResults = backupData.results.filter(result => !usedUrls.includes(result.urls.regular));
+          
+          if (unusedBackupResults.length > 0) {
+            // Choose a random unused image
+            const randomIndex = Math.floor(Math.random() * unusedBackupResults.length);
+            return unusedBackupResults[randomIndex].urls.regular;
+          } else if (backupData.results.length > 0) {
+            // If all have been used, pick a random one
+            const randomIndex = Math.floor(Math.random() * backupData.results.length);
+            return backupData.results[randomIndex].urls.regular;
+          }
         }
       }
     }
     
     // Fallback to category-based image
     console.log(`Using fallback image for category: ${category}`);
-    return FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+    return getRandomUnusedImage(category, usedUrls);
   } catch (error) {
     console.error('Error fetching image:', error);
     // Determine a fallback category and use a guaranteed working image
     const keywords = extractKeywords('', slideTitle, promptTopic);
     const category = determineCategory(promptTopic, keywords);
-    return FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+    return getRandomUnusedImage(category, usedUrls);
   }
+}
+
+// Helper function to get a random unused image from a category
+function getRandomUnusedImage(category, usedUrls) {
+  // Use a randomized fallback category if the main one is unavailable
+  const fallbackOptions = {
+    business: [
+      'https://images.unsplash.com/photo-1664575599736-c5197c684172?w=800',
+      'https://images.unsplash.com/photo-1556761175-5973dc0f32e7?w=800',
+      'https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=800',
+      'https://images.unsplash.com/photo-1497215842964-222b430dc094?w=800',
+      'https://images.unsplash.com/photo-1551836022-deb4988cc6c0?w=800'
+    ],
+    technology: [
+      'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800',
+      'https://images.unsplash.com/photo-1488590528505-98d2b5aba04b?w=800',
+      'https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800',
+      'https://images.unsplash.com/photo-1518770660439-4636190af475?w=800',
+      'https://images.unsplash.com/photo-1519389950473-47ba0277781c?w=800'
+    ],
+    nature: [
+      'https://images.unsplash.com/photo-1501854140801-50d01698950b?w=800',
+      'https://images.unsplash.com/photo-1470071459604-3b5ec3a7fe05?w=800',
+      'https://images.unsplash.com/photo-1441974231531-c6227db76b6e?w=800',
+      'https://images.unsplash.com/photo-1472214103451-9374bd1c798e?w=800',
+      'https://images.unsplash.com/photo-1469474968028-56623f02e42e?w=800'
+    ],
+    food: [
+      'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800',
+      'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800',
+      'https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800',
+      'https://images.unsplash.com/photo-1504754524776-8f4f37790ca0?w=800',
+      'https://images.unsplash.com/photo-1499028344343-cd173ffc68a9?w=800'
+    ],
+    travel: [
+      'https://images.unsplash.com/photo-1488085061387-422e29b40080?w=800',
+      'https://images.unsplash.com/photo-1500835556837-99ac94a94552?w=800',
+      'https://images.unsplash.com/photo-1528543606781-2f6e6857f318?w=800',
+      'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?w=800',
+      'https://images.unsplash.com/photo-1473496169904-658ba7c44d8a?w=800'
+    ],
+    sports: [
+      'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800',
+      'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800',
+      'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800',
+      'https://images.unsplash.com/photo-1530549387789-4c1017266635?w=800',
+      'https://images.unsplash.com/photo-1517649281203-dad836b4b028?w=800'
+    ],
+    education: [
+      'https://images.unsplash.com/photo-1503676260728-1c00da094a0b?w=800',
+      'https://images.unsplash.com/photo-1523050854058-8df90110c9f1?w=800',
+      'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=800',
+      'https://images.unsplash.com/photo-1546410531-bb4caa6b424d?w=800',
+      'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=800'
+    ],
+    health: [
+      'https://images.unsplash.com/photo-1505576399279-565b52d4ac71?w=800',
+      'https://images.unsplash.com/photo-1506126613408-eca07ce68773?w=800',
+      'https://images.unsplash.com/photo-1498837167922-ddd27525d352?w=800',
+      'https://images.unsplash.com/photo-1532938911079-1b06ac7ceec7?w=800',
+      'https://images.unsplash.com/photo-1571019613454-1cb2f99b2d8b?w=800'
+    ],
+    science: [
+      'https://images.unsplash.com/photo-1507413245164-6160d8298b31?w=800',
+      'https://images.unsplash.com/photo-1518152006812-edab29b069ac?w=800',
+      'https://images.unsplash.com/photo-1603126857599-f6e157fa2fe6?w=800',
+      'https://images.unsplash.com/photo-1582719471384-894fbb16e074?w=800',
+      'https://images.unsplash.com/photo-1576086213369-97a306d36557?w=800'
+    ],
+    art: [
+      'https://images.unsplash.com/photo-1579783483458-83d02161294e?w=800',
+      'https://images.unsplash.com/photo-1499781350541-7783f6c6a0c8?w=800',
+      'https://images.unsplash.com/photo-1513364776144-60967b0f800f?w=800',
+      'https://images.unsplash.com/photo-1548081087-11c73fc3ce86?w=800',
+      'https://images.unsplash.com/photo-1560419015-7c427e8ae5ba?w=800'
+    ],
+    music: [
+      'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=800',
+      'https://images.unsplash.com/photo-1507838153414-b4b713384a76?w=800',
+      'https://images.unsplash.com/photo-1514320291840-2e0a9bf2a9ae?w=800',
+      'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800',
+      'https://images.unsplash.com/photo-1458560871784-56d23406c091?w=800'
+    ],
+    finance: [
+      'https://images.unsplash.com/photo-1565514501303-256e0ea65d49?w=800',
+      'https://images.unsplash.com/photo-1611174743c4-3c7d8e80e44c?w=800',
+      'https://images.unsplash.com/photo-1638913975386-d61f0ec6500d?w=800',
+      'https://images.unsplash.com/photo-1620714223084-8fcacc6dfd8d?w=800',
+      'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=800'
+    ],
+    default: [
+      'https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800',
+      'https://images.unsplash.com/photo-1604871000636-074fa5117945?w=800',
+      'https://images.unsplash.com/photo-1523821741446-edb2b68bb7a0?w=800',
+      'https://images.unsplash.com/photo-1493612276216-ee3925520721?w=800',
+      'https://images.unsplash.com/photo-1557682250-33bd709cbe85?w=800'
+    ]
+  };
+  
+  // If we have specific options for this category, use them
+  const categoryOptions = fallbackOptions[category] || fallbackOptions.default;
+  
+  // Filter out used URLs
+  const unusedOptions = categoryOptions.filter(url => !usedUrls.includes(url));
+  if (unusedOptions.length > 0) {
+    // Return a random unused option
+    return unusedOptions[Math.floor(Math.random() * unusedOptions.length)];
+  }
+  
+  // If all options for this category are used, try the main FALLBACK_IMAGES
+  const mainImage = FALLBACK_IMAGES[category] || FALLBACK_IMAGES.default;
+  if (!usedUrls.includes(mainImage)) {
+    return mainImage;
+  }
+  
+  // If even the main image is used, pick a random category's image
+  const allCategories = Object.keys(FALLBACK_IMAGES);
+  
+  // Filter out categories we've already tried
+  const unusedCategories = allCategories.filter(cat => 
+    cat !== category && FALLBACK_IMAGES[cat] && !usedUrls.includes(FALLBACK_IMAGES[cat])
+  );
+  
+  if (unusedCategories.length > 0) {
+    // Choose a random unused category
+    const randomCategory = unusedCategories[Math.floor(Math.random() * unusedCategories.length)];
+    return FALLBACK_IMAGES[randomCategory];
+  }
+  
+  // Last resort: return a completely random image from any category's options
+  const allOptions = Object.values(fallbackOptions).flat();
+  return allOptions[Math.floor(Math.random() * allOptions.length)];
 }
 
 // Extract meaningful keywords from slide content and title
